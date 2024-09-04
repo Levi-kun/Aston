@@ -5,6 +5,7 @@ class MyClient extends Client {
         super(options);
         this.commands = new Collection();
         this.cooldowns = new Collection(); // Assign the Collection here
+        this.Events.randomServerSpawner = new Event()
     }
 }
 
