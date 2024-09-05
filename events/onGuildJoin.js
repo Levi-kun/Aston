@@ -7,68 +7,77 @@ const dbRunAsync = util.promisify(db.run.bind(db));
 
 let tableCreated = false;
 
-async function createOrInsertUser(guildId, userId, userName) {
-  try {
-    // Check if the table exists
-    const tableExists = await dbRunAsync(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-      [`${guildId}_users`]
-    );
-
-    if (!tableExists) {
-      // Create the table
-      await dbRunAsync(`
-        CREATE TABLE IF NOT EXISTS \`${guildId}_users\` (
-          user_id INTEGER PRIMARY KEY UNIQUE,
-          name TEXT,
-          cards TEXT,
-          currentClaims INTEGER,
-          lastClaimDate TEXT,
-          wins INTEGER,
-          losses INTEGER,
-          value INTEGER,
-          cardAmount INTEGER,
-          pro BOOLEAN
+async function main(guildId, userId, userName, defaultChannel) {
+    try {
+        // Check if the table exists
+        const tableExists = await dbRunAsync(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+            [`${guildId}_users`]
         );
-      `);
-    }
 
-    // Check if the user exists
-    const existingUser = await dbRunAsync(
-      `SELECT * FROM \`${guildId}_users\` WHERE user_id = ?`,
-      [userId]
-    );
+        if (!tableExists) {
+            // Create the table
+            await dbRunAsync(`
+                CREATE TABLE IF NOT EXISTS \`${guildId}_users\` (
+                    user_id INTEGER PRIMARY KEY UNIQUE,
+                    name TEXT,
+                    cards TEXT,
+                    currentClaims INTEGER,
+                    lastClaimDate TEXT,
+                    wins INTEGER,
+                    losses INTEGER,
+                    value INTEGER,
+                    cardAmount INTEGER,
+                    pro BOOLEAN
+                );
+            `);
+        }
 
-    if (existingUser) {
-      console.log(`User ID ${userId} already exists in the database.`);
-    } else {
-      // Insert the user
-      await dbRunAsync(`
-        INSERT INTO \`${guildId}_users\`
-        (user_id, name, cards, currentClaims, lastClaimDate, wins, losses, value, cardAmount, pro)
-        VALUES (?, ?, ' ', 0, ' ', 0, 0, 0, 0, 0)
-      `, [userId, userName]);
-      console.log(`User ${userName} (${userId}) added to the database.`);
+        // Check if the user exists
+        const existingUser = await dbRunAsync(
+            `SELECT * FROM \`${guildId}_users\` WHERE user_id = ?`,
+            [userId]
+        );
+
+        if (existingUser) {
+            console.log(`User ID ${userId} already exists in the database.`);
+        } else {
+            // Insert the user
+            await dbRunAsync(`
+                INSERT INTO \`${guildId}_users\`
+                (user_id, name, cards, currentClaims, lastClaimDate, wins, losses, value, cardAmount, pro)
+                VALUES (?, ?, ' ', 0, ' ', 0, 0, 0, 0, 0)
+            `, [userId, userName]);
+            console.log(`User ${userName} (${userId}) added to the database.`);
+        }
+    } catch (error) {
+        console.error("Error:", error.message);
     }
-  } catch (error) {
-    if(tableCreated==="false") {
-      console.error("Error:", error.message);}
-  }
 }
 
 
-async function createCopy(guildId) {
-    const copiedTableExists = await dbRunAsync(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-        [`${guildId}_cards`]
-    );
+async function createCopy(guildId, defaultChannel) {
+    try {
+        const copiedTableExists = await dbRunAsync(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+            [`${guildId}_cards`]
+        );
 
-    if (!copiedTableExists) {
-        await dbRunAsync(`
-            CREATE TABLE "${guildId}_cards" AS
-            SELECT *
-            FROM animeCardList
-        `);
+        if (!copiedTableExists) {
+            await dbRunAsync(`
+                CREATE TABLE "${guildId}_cards" AS
+                SELECT *
+                FROM animeCardList
+            `);
+        }
+    } catch (error) {
+        if (error.message.includes("already exists")) {
+            if (defaultChannel && defaultChannel.permissionsFor(defaultChannel.guild.me).has("SEND_MESSAGES")) {
+                defaultChannel.send("Another Round?");
+            }
+        } else {
+            console.error("Error:", error.message);
+        }
     }
 }
 
@@ -94,8 +103,9 @@ module.exports = {
 				textChannels.find((channel) =>
 					channel.permissionsFor(client).has("SEND_MESSAGES")
 				) || guild.systemChannel;
-
+			let textChannelID = 0;
 			if (textChannel) {
+				textChannelID = textChannel.id
 				console.log(`Found text Channel: ${textChannel.name}`);
 			} else {
 				console.log(`No suitable text channel found.`);
@@ -108,7 +118,7 @@ module.exports = {
 			const gainADAY = config.default_values.gainADAY;
 			const searchADAY = config.default_values.searchADAY;
 			const value = 0;
-			const defaultChannelId = textChannel.id;
+			const defaultChannelId = textChannelID;
 
 			createCopy(guildId)
 
@@ -220,7 +230,7 @@ module.exports = {
 							}
 						}
 					);
-					createOrInsertUser(guildId, userId, userName)
+					main(guildId, userId, userName)
 				});
 			});
 		} catch (error) {
