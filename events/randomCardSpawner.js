@@ -1,12 +1,58 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { GatewayIntentBits, ButtonBuilder, ButtonStyle, EmbedBuilder, ActionRowBuilder } = require("discord.js");
 const sqlite3 = require("sqlite3").verbose();
 const animedb = new sqlite3.Database("databases/animeDataBase.db");
 const eventEmitter = require("../src/eventManager");
 const util = require("util");
+const { timeStamp } = require("console");
 
 // Promisify db methods
 const dbAllAsync = util.promisify(animedb.all.bind(animedb));
 const dbGetAsync = util.promisify(animedb.get.bind(animedb));
+
+function capitalizeFirstLetter(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function rarityDesignater(rarity){
+    let value = "D"
+    if(rarity <= 2) {
+        value = "C"
+    } else if(rarity <= 3) {
+        value = "B"
+    } else if(rarity <=4){
+        value = "A"
+
+    } else if(rarity <=5){
+        value = "S+"
+    }
+    return value
+}
+
+async function messageCreater (image, card, defaultChannel,link) {
+
+    const claimButton = new ButtonBuilder()
+    .setCustomId('Claim')
+    .setLabel('Claim this Card')
+    .setStyle(ButtonStyle.Primary);
+    console.log(card)
+    const cardEmbed = new EmbedBuilder()
+    .setColor("000000")
+    .setImage(`${image}`)
+    .setDescription(`[${capitalizeFirstLetter(card.Name)}](${link})`)
+    .addFields(
+		{ name: 'Value', value: `${card.Value}`},
+		{ name: 'Rarity', value: `${rarityDesignater(card.Rarity)}`, inline: true});
+     //.setFooter({                           plan on making a database
+       // text: `${timeStamp}`}); 
+
+    
+    const row = new ActionRowBuilder()
+    .addComponents(claimButton);
+
+    await defaultChannel.send({embeds: [cardEmbed], components: [row]});
+
+
+}
 
 module.exports = {
     name: 'spawnInCard',
@@ -44,11 +90,26 @@ module.exports = {
             const defaultChannelId = guildData.defaultChannelId;
             console.log(`Retrieved defaultChannelId: ${defaultChannelId}`);
 
+            const photoQuery = `
+            SELECT pictureData, link
+            FROM animeCardPictures
+            WHERE cardId = ?
+        `;
+        const photos = await dbAllAsync(photoQuery, [card.id]);
+        
+        if (!photos) {
+            return console.log(`Broski ${card.id} still has no images`);
+        }
+        
+        const image = photos.map((photo) => photo.pictureData);
+        const link = photos.map((photo) => photo.link || 'google.com');
+        
+        
+            
             // Send messages to the default channel
             const defaultChannel = guild.channels.cache.get(defaultChannelId);
             if (defaultChannel) {
-                await defaultChannel.send("Click the button to claim");
-                await defaultChannel.send(card.Name);
+                messageCreater(image[0],card,defaultChannel,link[0])
             } else {
                 console.error("Default channel not found");
             }

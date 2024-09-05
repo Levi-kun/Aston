@@ -78,7 +78,7 @@ module.exports = {
         if (interaction.user.id !== ownerId) return;
 
         // Get option values from the interaction
-        const cardName = interaction.options.getString("cardname");
+        const cardName = interaction.options.getString("cardname").toLowerCase()
         const cardValue = interaction.options.getString("cardvalue");
         const cardCategories = interaction.options.getString("cardcategories");
         const cardRarity = interaction.options.getInteger("cardrarity");

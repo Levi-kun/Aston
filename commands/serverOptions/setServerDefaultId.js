@@ -41,17 +41,17 @@ module.exports = {
         .setName('defaultchannel')
         .setDescription('Wanna change the default channel?')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-        .addChannelOption(option => 
-            option
-            .setName('channel')
-            .setDescription('Which channel, boss?')
-            .setRequired(false) // Channel is optional if fetchid is provided
-        )
+        
         .addBooleanOption(option => 
             option
             .setName('fetchid')
             .setDescription('Fetches the current default ID')
             .setRequired(true) // Make fetchid required
+        ).addChannelOption(option => 
+            option
+            .setName('channel')
+            .setDescription('Which channel, boss?')
+            .setRequired(false) // Channel is optional if fetchid is provided
         ),
     async execute(interaction) {
         const booleanOption = interaction.options.getBoolean('fetchid');
