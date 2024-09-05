@@ -45,12 +45,29 @@ async function messageCreater (image, card, defaultChannel,link) {
      //.setFooter({                           plan on making a database
        // text: `${timeStamp}`}); 
 
-    
+    /*
+
+        Just planning on what i want to happen next:
+
+        A) the card is assign power and moves.
+        B) the player get's the card in their server row.
+        C) the card deletes itself.
+        
+
+    */
+
     const row = new ActionRowBuilder()
     .addComponents(claimButton);
 
-    await defaultChannel.send({embeds: [cardEmbed], components: [row]});
+    let message = await defaultChannel.send({embeds: [cardEmbed], components: [row]});
+    const confirmation = await response.awaitMessageComponent({ filter: collectorFilter, time: 600_000 });
 
+            if (confirmation.customId === "Claim") { 
+
+                message.delete()
+                
+
+            }
 
 }
 
