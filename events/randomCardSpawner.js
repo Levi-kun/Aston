@@ -42,6 +42,8 @@ async function messageCreater (image, card, defaultChannel,link) {
     .addFields(
 		{ name: 'Value', value: `${card.Value}`},
 		{ name: 'Rarity', value: `${rarityDesignater(card.Rarity)}`, inline: true});
+
+        
      //.setFooter({                           plan on making a database
        // text: `${timeStamp}`}); 
 
