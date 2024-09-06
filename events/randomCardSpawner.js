@@ -13,6 +13,11 @@ function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+function powerToMultiplier (integer){
+    let power = 0
+    power=integer/100
+}
+
 function rarityDesignater(rarity){
     let value = "D"
     if(rarity <= 2) {
@@ -28,7 +33,7 @@ function rarityDesignater(rarity){
     return value
 }
 
-async function messageCreater (image, card, defaultChannel,link) {
+async function messageCreater (image, card, defaultChannel,link, moves) {
 
     const claimButton = new ButtonBuilder()
     .setCustomId('Claim')
@@ -47,6 +52,9 @@ async function messageCreater (image, card, defaultChannel,link) {
      //.setFooter({                           plan on making a database
        // text: `${timeStamp}`}); 
 
+
+
+
     /*
 
         Just planning on what i want to happen next:
@@ -64,10 +72,12 @@ async function messageCreater (image, card, defaultChannel,link) {
     let message = await defaultChannel.send({embeds: [cardEmbed], components: [row]});
     const confirmation = await response.awaitMessageComponent({ filter: collectorFilter, time: 600_000 });
 
+    const nextCollectorFilter = (i) =>
+        i.user.id === interaction.user.id && i.customId === "next";
             if (confirmation.customId === "Claim") { 
 
                 message.delete()
-                
+
 
             }
 
