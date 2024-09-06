@@ -62,10 +62,12 @@ async function messageCreater (image, card, defaultChannel,link) {
     let message = await defaultChannel.send({embeds: [cardEmbed], components: [row]});
     const confirmation = await response.awaitMessageComponent({ filter: collectorFilter, time: 600_000 });
 
+    const nextCollectorFilter = (i) =>
+        i.user.id === interaction.user.id && i.customId === "next";
             if (confirmation.customId === "Claim") { 
 
                 message.delete()
-                
+
 
             }
 
