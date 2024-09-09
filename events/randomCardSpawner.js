@@ -58,6 +58,19 @@ async function messageCreater (image, card, defaultChannel,link, moves) {
         Just planning on what i want to happen next:
 
         A) the card is assign power and moves.
+
+        create a table called owned_Cards_(guild id)
+        SCHEMA:
+        vr
+        id
+        rank
+        card_id
+        player_id
+        realPower
+        move_ids
+
+
+
         B) the player get's the card in their server row.
         C) the card deletes itself.
         
