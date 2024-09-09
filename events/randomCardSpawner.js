@@ -35,7 +35,7 @@ function rarityDesignater(rarity){
     return value
 }
 
-function addToPlayer (user, card, moveData, guild) {
+function addToPlayer (user, card, moveId, guild) {
     let row = `INSERT INTO owned_Cards${guild.id}  (id, vr, rank, card_id, player_id, realPower,move_ids)`
     let power;
     if(card.power>=4){
@@ -44,7 +44,7 @@ function addToPlayer (user, card, moveData, guild) {
         power = math.floor(card.power*Math.random(0.8,1.199))
     }
 
-    const rowData = animedb.dbAllAsync(row, [version, card.rank, card.id, user.id, power, moveData])
+    const rowData = animedb.dbAllAsync(row, [version, card.rank, card.id, user.id, power, moveId])
 
 }
 
@@ -54,19 +54,15 @@ function grabCardMoves (id) {
 
     const moves = animedb.dbGetAsync(row)
 
-    let moveName;
-    let movePower;
-    let moveRelation;
+    let rowId = []
 
     moves.map((row) => {
 
-        row.Name = moveName;
-        row.movePower = movePower;
-        row.moveRelation = moveRelation;
+        rowId.push(row.id);
 
     })
 
-    return moveName, movePower, moveRelation
+    return rowId
 
 };
 
