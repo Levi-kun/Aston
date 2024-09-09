@@ -45,7 +45,7 @@ function addToPlayer (user, card, moveData, guild) {
     }
 
     const rowData = animedb.dbAllAsync(row, [version, card.rank, card.id, user.id, power, moveData])
-    
+
 }
 
 function grabCardMoves (id) {
@@ -70,7 +70,7 @@ function grabCardMoves (id) {
 
 };
 
-async function messageCreater (image, card, defaultChannel,link, moves) {
+async function messageCreater (image, card, defaultChannel,link) {
 
     const claimButton = new ButtonBuilder()
     .setCustomId('Claim')
@@ -125,6 +125,9 @@ async function messageCreater (image, card, defaultChannel,link, moves) {
             if (confirmation.customId === "Claim") { 
 
                 message.delete()
+
+                addToPlayer(i.user,card,grabCardMoves(card.id),guild)
+                message.channel.send(`${user.name}, congrats on obtaining: ${card.name}`)
 
 
             }
