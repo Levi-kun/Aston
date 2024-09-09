@@ -5,6 +5,8 @@ const eventEmitter = require("../src/eventManager");
 const util = require("util");
 const { timeStamp } = require("console");
 
+const version = 1
+
 // Promisify db methods
 const dbAllAsync = util.promisify(animedb.all.bind(animedb));
 const dbGetAsync = util.promisify(animedb.get.bind(animedb));
@@ -32,6 +34,41 @@ function rarityDesignater(rarity){
     }
     return value
 }
+
+function addToPlayer (user, card, moveData, guild) {
+    let row = `INSERT INTO owned_Cards${guild.id}  (id, vr, rank, card_id, player_id, realPower,move_ids)`
+    let power;
+    if(card.power>=4){
+        power = math.floor(card.power*Math.random(0.9,1.111))
+    } else {
+        power = math.floor(card.power*Math.random(0.8,1.199))
+    }
+
+    const rowData = animedb.dbAllAsync(row, [version, card.rank, card.id, user.id, power, moveData])
+    
+}
+
+function grabCardMoves (id) {
+
+    let row = `SELECT * card_moves WHERE id = ? VALUES (${id})`
+
+    const moves = animedb.dbGetAsync(row)
+
+    let moveName;
+    let movePower;
+    let moveRelation;
+
+    moves.map((row) => {
+
+        row.Name = moveName;
+        row.movePower = movePower;
+        row.moveRelation = moveRelation;
+
+    })
+
+    return moveName, movePower, moveRelation
+
+};
 
 async function messageCreater (image, card, defaultChannel,link, moves) {
 
