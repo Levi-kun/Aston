@@ -1,11 +1,11 @@
-const { GatewayIntentBits, ButtonBuilder, ButtonStyle, EmbedBuilder, ActionRowBuilder } = require("discord.js");
+const { ButtonBuilder, ButtonStyle, EmbedBuilder, ActionRowBuilder } = require("discord.js");
 const sqlite3 = require("sqlite3").verbose();
 const animedb = new sqlite3.Database("databases/animeDataBase.db");
 const eventEmitter = require("../src/eventManager");
 const util = require("util");
 const { timeStamp } = require("console");
 
-const version = 1
+const version = 1 // version header
 
 // Promisify db methods
 const dbAllAsync = util.promisify(animedb.all.bind(animedb));
@@ -15,10 +15,6 @@ function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-function powerToMultiplier (integer){
-    let power = 0
-    power=integer/100
-}
 
 function rarityDesignater(rarity){
     let value = "D"
@@ -46,6 +42,7 @@ function addToPlayer (user, card, moveId, guild) {
 
     const rowData = animedb.dbAllAsync(row, [version, card.rank, card.id, user.id, power, moveId])
 
+    return rowData;
 }
 
 function grabCardMoves (id) {
@@ -94,14 +91,15 @@ async function messageCreater (image, card, defaultChannel,link) {
 
         create a table called owned_Cards_(guild id)
         SCHEMA:
-        vr
-        id
-        rank
-        card_id
-        player_id
+        vr NOT NULL
+        timestamp created NOT NULL
+        id NOT NULL PRIMARY_KEY
+        rank NOT NULL
+        card_id NOT NULL
+        player_id NOT NULL
         realPower
         move_ids
-
+        inGroup
 
 
         B) the player get's the card in their server row.
