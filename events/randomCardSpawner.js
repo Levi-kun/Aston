@@ -4,7 +4,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
 } = require("discord.js");
-const sqlite3 = require("sqlite3").verbose();
+const sqlite3 = require("sqlite3");
 const animedb = new sqlite3.Database("databases/animeDataBase.db");
 const eventEmitter = require("../src/eventManager");
 const util = require("util");
@@ -38,9 +38,9 @@ function addToPlayer(user, card, moveId, guild) {
     let row = `INSERT INTO owned_Cards${guild.id}  (id, vr, rank, card_id, player_id, realPower,move_ids)`;
     let power;
     if (card.power >= 4) {
-        power = math.floor(card.power * Math.random(0.9, 1.111));
+        power = Math.floor(card.power * Math.random(0.9, 1.111));
     } else {
-        power = math.floor(card.power * Math.random(0.8, 1.199));
+        power = Math.floor(card.power * Math.random(0.8, 1.199));
     }
 
     const rowData = animedb.dbAllAsync(row, [
@@ -56,7 +56,7 @@ function addToPlayer(user, card, moveId, guild) {
 }
 
 function grabCardMoves(id) {
-    let row = `SELECT * card_moves WHERE id = ? VALUES (${id})`;
+    let row = `SELECT * FROM card_moves WHERE id = ? VALUES (${id})`;
 
     const moves = animedb.dbGetAsync(row);
 
@@ -113,6 +113,17 @@ async function messageCreater(image, card, defaultChannel, link) {
         C) the card deletes itself.
         
 
+
+        so basically we should use node-schedule
+
+        CREATE TABLE IF NOT EXISTS server_settings (
+    guild_id TEXT PRIMARY KEY,
+    numbersDaily INTEGER DEFAULT 10,
+    cardsToday INTEGER DEFAULT 0,
+    lastReset TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
     */
 
     const row = new ActionRowBuilder().addComponents(claimButton);
@@ -121,7 +132,7 @@ async function messageCreater(image, card, defaultChannel, link) {
         embeds: [cardEmbed],
         components: [row],
     });
-    const confirmation = await response.awaitMessageComponent({
+    const confirmation = await message.awaitMessageComponent({
         filter: collectorFilter,
         time: 600_000,
     });
