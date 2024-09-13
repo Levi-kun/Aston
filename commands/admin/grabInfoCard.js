@@ -13,7 +13,9 @@ module.exports = {
         .addStringOption((option) =>
             option
                 .setName("cardname")
-                .setDescription("Enter the name of the card you want to retrieve data for")
+                .setDescription(
+                    "Enter the name of the card you want to retrieve data for"
+                )
                 .setRequired(true)
         ),
     async execute(interaction) {
@@ -32,7 +34,9 @@ module.exports = {
             const cardData = await dbAllAsync(query, [cardName]);
 
             if (cardData.length === 0) {
-                await interaction.reply(`No data found for card "${cardName}".`);
+                await interaction.reply(
+                    `No data found for card "${cardName}".`
+                );
             } else {
                 // Assuming you want to display the data in a formatted way
                 const formattedData = cardData.map((card) => {
@@ -46,7 +50,7 @@ module.exports = {
                     WHERE cardId = ?
                 `;
                 const moves = await dbAllAsync(moveQuery, [cardData[0].id]);
-                
+
                 const formattedMoves = moves.map((move) => {
                     return `Move: ${move.moveName}, Description: ${move.moveDescription}, Type: ${move.moveType}, Base DMG: ${move.baseDMG}`;
                 });
@@ -61,11 +65,19 @@ module.exports = {
 
                 const photoUrls = photos.map((photo) => photo.pictureData);
 
-                await interaction.reply(`Data for card "${cardName}":\n${formattedData.join("\n")}\nMoves:\n${formattedMoves.join("\n")}\nPhotos:\n${photoUrls.join("\n")}`);
+                await interaction.reply(
+                    `Data for card "${cardName}":\n${formattedData.join(
+                        "\n"
+                    )}\nMoves:\n${formattedMoves.join(
+                        "\n"
+                    )}\nPhotos:\n${photoUrls.join("\n")}`
+                );
             }
         } catch (error) {
             console.error("Error retrieving card data:", error.message);
-            await interaction.reply("An error occurred while retrieving card data.");
+            await interaction.reply(
+                "An error occurred while retrieving card data."
+            );
         }
     },
 };

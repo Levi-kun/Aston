@@ -1,4 +1,4 @@
-const { Client, Collection, GatewayIntentBits } = require('discord.js');
+const { Client, Collection, GatewayIntentBits } = require("discord.js");
 
 class MyClient extends Client {
     constructor(options) {
@@ -8,6 +8,14 @@ class MyClient extends Client {
     }
 }
 
-const client = new MyClient({ intents: [GatewayIntentBits.Guilds, "GuildVoiceStates", GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
+const client = new MyClient({
+    intents: [
+        GatewayIntentBits.Guilds,
+        "GuildVoiceStates",
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+    ],
+});
 
 module.exports = client;

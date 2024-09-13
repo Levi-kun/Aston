@@ -43,18 +43,20 @@ async function main(guildId, userId, userName, defaultChannel) {
             console.log(`User ID ${userId} already exists in the database.`);
         } else {
             // Insert the user
-            await dbRunAsync(`
+            await dbRunAsync(
+                `
                 INSERT INTO \`${guildId}_users\`
                 (user_id, name, cards, currentClaims, lastClaimDate, wins, losses, value, cardAmount, pro)
                 VALUES (?, ?, ' ', 0, ' ', 0, 0, 0, 0, 0)
-            `, [userId, userName]);
+            `,
+                [userId, userName]
+            );
             console.log(`User ${userName} (${userId}) added to the database.`);
         }
     } catch (error) {
         console.error("Error:", error.message);
     }
 }
-
 
 async function createCopy(guildId, defaultChannel) {
     try {
@@ -72,7 +74,12 @@ async function createCopy(guildId, defaultChannel) {
         }
     } catch (error) {
         if (error.message.includes("already exists")) {
-            if (defaultChannel && defaultChannel.permissionsFor(defaultChannel.guild.me).has("SEND_MESSAGES")) {
+            if (
+                defaultChannel &&
+                defaultChannel
+                    .permissionsFor(defaultChannel.guild.me)
+                    .has("SEND_MESSAGES")
+            ) {
                 defaultChannel.send("Another Round?");
             }
         } else {
@@ -81,162 +88,159 @@ async function createCopy(guildId, defaultChannel) {
     }
 }
 
-
-
 module.exports = {
-	name: Events.GuildCreate,
-	async execute(guild) {
-    
-    console.log("Executing Guild")
-    console.log(" ")
-		try {
-			const client = guild.client;
-			const textChannels = guild.channels.cache.filter(
-				(channel) => channel.type === "text"
-			);
+    name: Events.GuildCreate,
+    async execute(guild) {
+        console.log("Executing Guild");
+        console.log(" ");
+        try {
+            const client = guild.client;
+            const textChannels = guild.channels.cache.filter(
+                (channel) => channel.type === "text"
+            );
 
-			textChannels.forEach((e) => {
-				console.log(e.name);
-			});
+            textChannels.forEach((e) => {
+                console.log(e.name);
+            });
 
-			const textChannel =
-				textChannels.find((channel) =>
-					channel.permissionsFor(client).has("SEND_MESSAGES")
-				) || guild.systemChannel;
-			let textChannelID = 0;
-			if (textChannel) {
-				textChannelID = textChannel.id
-				console.log(`Found text Channel: ${textChannel.name}`);
-			} else {
-				console.log(`No suitable text channel found.`);
-			}
+            const textChannel =
+                textChannels.find((channel) =>
+                    channel.permissionsFor(client).has("SEND_MESSAGES")
+                ) || guild.systemChannel;
+            let textChannelID = 0;
+            if (textChannel) {
+                textChannelID = textChannel.id;
+                console.log(`Found text Channel: ${textChannel.name}`);
+            } else {
+                console.log(`No suitable text channel found.`);
+            }
 
-			const { id, name, memberCount } = guild;
-			const guildId = id;
-			const guildName = name;
-			const guildUserCount = memberCount;
-			const gainADAY = config.default_values.gainADAY;
-			const searchADAY = config.default_values.searchADAY;
-			const value = 0;
-			const defaultChannelId = textChannelID;
+            const { id, name, memberCount } = guild;
+            const guildId = id;
+            const guildName = name;
+            const guildUserCount = memberCount;
+            const gainADAY = config.default_values.gainADAY;
+            const searchADAY = config.default_values.searchADAY;
+            const value = 0;
+            const defaultChannelId = textChannelID;
 
-			createCopy(guildId)
+            createCopy(guildId);
 
-			// Insert or update the guild data in 'guildTable'
-			db.get(
-				"SELECT * FROM guildTable WHERE guildID = ?",
-				[guild.id],
-				(err, row) => {
-					if (row) {
-						// Guild already exists, update the existing row
-						db.run(
-							`
+            // Insert or update the guild data in 'guildTable'
+            db.get(
+                "SELECT * FROM guildTable WHERE guildID = ?",
+                [guild.id],
+                (err, row) => {
+                    if (row) {
+                        // Guild already exists, update the existing row
+                        db.run(
+                            `
             UPDATE guildTable
             SET guildName = ?, amountofUsers = ?
             WHERE guildID = ?
           `,
-							[guildName, guildUserCount, guildId],
-							(updateErr) => {
-								if (updateErr) {
-									console.error(
-										"Error updating guild data:",
-										updateErr
-									);
-								} else {
-									console.log(
-										`Guild ${guildName}: (${guildId}) updated.`
-									);
-								}
-							}
-						);
-					} else {
-						// Guild doesn't exist, insert a new row
-						db.run(
-							`
+                            [guildName, guildUserCount, guildId],
+                            (updateErr) => {
+                                if (updateErr) {
+                                    console.error(
+                                        "Error updating guild data:",
+                                        updateErr
+                                    );
+                                } else {
+                                    console.log(
+                                        `Guild ${guildName}: (${guildId}) updated.`
+                                    );
+                                }
+                            }
+                        );
+                    } else {
+                        // Guild doesn't exist, insert a new row
+                        db.run(
+                            `
             INSERT INTO guildTable
             (guildID, guildName, amountofUsers, gainADAY, searchADAY, value, defaultChannelId)
             VALUES (?, ?, ?, ?, ?, ?, ?)
           `,
-							[
-								guildId,
-								guildName,
-								guildUserCount,
-								gainADAY,
-								searchADAY,
-								value,
-								defaultChannelId,
-							],
-							(insertErr) => {
-								if (insertErr) {
-									console.error(
-										"Error inserting guild data:",
-										insertErr
-									);
-								} else {
-									console.log(
-										`Joined guild: ${name} (${id})`
-									);
-								}
-							}
-						);
-					}
+                            [
+                                guildId,
+                                guildName,
+                                guildUserCount,
+                                gainADAY,
+                                searchADAY,
+                                value,
+                                defaultChannelId,
+                            ],
+                            (insertErr) => {
+                                if (insertErr) {
+                                    console.error(
+                                        "Error inserting guild data:",
+                                        insertErr
+                                    );
+                                } else {
+                                    console.log(
+                                        `Joined guild: ${name} (${id})`
+                                    );
+                                }
+                            }
+                        );
+                    }
 
-					if (err) {
-						console.error("Error checking guild ID:", err);
-					}
-				}
-			);
+                    if (err) {
+                        console.error("Error checking guild ID:", err);
+                    }
+                }
+            );
 
-			// Fetch all members in the guild
-			guild.members.fetch().then((members) => {
-				members.forEach((member) => {
-					const userId = member.user.id;
-					const userName = member.user.username;
+            // Fetch all members in the guild
+            guild.members.fetch().then((members) => {
+                members.forEach((member) => {
+                    const userId = member.user.id;
+                    const userName = member.user.username;
 
-					// Check if the user exists in the "userDataBase" table
-					db.get(
-						"SELECT * FROM userDataBase WHERE UserID = ?",
-						[userId],
-						(err, row) => {
-							if (row) {
-								console.log(
-									`ID ${userId} exists in the global database.`
-								);
-							} else {
-								// Insert the user into the "userDataBase" table
-								db.run(
-									`
+                    // Check if the user exists in the "userDataBase" table
+                    db.get(
+                        "SELECT * FROM userDataBase WHERE UserID = ?",
+                        [userId],
+                        (err, row) => {
+                            if (row) {
+                                console.log(
+                                    `ID ${userId} exists in the global database.`
+                                );
+                            } else {
+                                // Insert the user into the "userDataBase" table
+                                db.run(
+                                    `
                   INSERT INTO userDataBase (UserID, userName, globalClaims, globalValue, totalVictories, totalLosses, globalCards)
                   VALUES (?, ?, 0, 0, 0, 0, 0)
                   `,
-									[userId, userName],
-									(err) => {
-										if (err) {
-											console.error(
-												"Error inserting user:",
-												err
-											);
-										} else {
-											console.log(
-												`User ${userName} (${userId}) added to the global database.`
-											);
-										}
-									}
-								);
-							}
+                                    [userId, userName],
+                                    (err) => {
+                                        if (err) {
+                                            console.error(
+                                                "Error inserting user:",
+                                                err
+                                            );
+                                        } else {
+                                            console.log(
+                                                `User ${userName} (${userId}) added to the global database.`
+                                            );
+                                        }
+                                    }
+                                );
+                            }
 
-							if (err) {
-								console.error("Error checking ID:", err);
-							}
-						}
-					);
-					main(guildId, userId, userName)
-				});
-			});
-		} catch (error) {
-			console.error("Error executing guildCreate event:", error);
-		}
-    
-  console.log(" ")
-	},
+                            if (err) {
+                                console.error("Error checking ID:", err);
+                            }
+                        }
+                    );
+                    main(guildId, userId, userName);
+                });
+            });
+        } catch (error) {
+            console.error("Error executing guildCreate event:", error);
+        }
+
+        console.log(" ");
+    },
 };
