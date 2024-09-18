@@ -4,8 +4,52 @@ const config = require("../config.json");
 const db = new sqlite3.Database("databases/animeDataBase.db");
 const util = require("util");
 const dbRunAsync = util.promisify(db.run.bind(db));
-
+const configA = require('../config.json')
+const version = configA.version
 let tableCreated = false;
+/*
+
+
+        so basically we should use node-schedule
+
+        CREATE TABLE IF NOT EXISTS server_settings (
+    guild_id TEXT PRIMARY KEY,
+    numbersDaily INTEGER DEFAULT 10,
+    cardsToday INTEGER DEFAULT 0,
+    lastReset TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+    */
+async function owned_Cards_table (guildId) {
+    
+    let create = `CREATE TABLE IF NOT EXISTS \`${guildId}_owned_Cards\` (
+    vr INTEGER NOT NULL,
+    created_At DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UPDATED_AT DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id INTEGER PRIMARY KEY UNIQUE,
+    rank TEXT NOT NULL, 
+    card_id INTEGER NOT NULL,
+    player_id TEXT NOT NULL,
+    realPower INTEGER,
+    move_ids TEXT,
+    inGroup BOOLEAN);`
+
+    const checkCopiedGet = await dbRunAsync(create)
+    
+    let trigger = `CREATE TRIGGER \`${guildId}_owned_Cards_UPDATE\`
+    AFTER UPDATE ON \`${guildId}_owned_Cards\`
+        FOR EACH ROW
+        BEGIN
+            UPDATE \`${guildId}_owned_Cards\`
+            SET UPDATED_AT = CURRENT_TIMESTAMP
+            WHERE id = NEW.id;
+        END;`;
+
+    const createTrigger = await dbRunAsync(trigger);
+
+}
+
 
 async function main(guildId, userId, userName, defaultChannel) {
     try {
@@ -31,6 +75,8 @@ async function main(guildId, userId, userName, defaultChannel) {
                     pro BOOLEAN
                 );
             `);
+            
+            
         }
 
         // Check if the user exists
@@ -58,41 +104,15 @@ async function main(guildId, userId, userName, defaultChannel) {
     }
 }
 
-async function createCopy(guildId, defaultChannel) {
-    try {
-        const copiedTableExists = await dbRunAsync(
-            `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-            [`${guildId}_cards`]
-        );
-
-        if (!copiedTableExists) {
-            await dbRunAsync(`
-                CREATE TABLE "${guildId}_cards" AS
-                SELECT *
-                FROM animeCardList
-            `);
-        }
-    } catch (error) {
-        if (error.message.includes("already exists")) {
-            if (
-                defaultChannel &&
-                defaultChannel
-                    .permissionsFor(defaultChannel.guild.me)
-                    .has("SEND_MESSAGES")
-            ) {
-                defaultChannel.send("Another Round?");
-            }
-        } else {
-            console.error("Error:", error.message);
-        }
-    }
-}
 
 module.exports = {
     name: Events.GuildCreate,
     async execute(guild) {
         console.log("Executing Guild");
         console.log(" ");
+        
+        owned_Cards_table(guild.id)
+
         try {
             const client = guild.client;
             const textChannels = guild.channels.cache.filter(
@@ -123,8 +143,6 @@ module.exports = {
             const searchADAY = config.default_values.searchADAY;
             const value = 0;
             const defaultChannelId = textChannelID;
-
-            createCopy(guildId);
 
             // Insert or update the guild data in 'guildTable'
             db.get(

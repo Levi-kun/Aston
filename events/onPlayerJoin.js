@@ -3,6 +3,9 @@ const sqlite3 = require("sqlite3");
 const db = new sqlite3.Database("databases/animeDataBase.db");
 const util = require("util");
 const dbRunAsync = util.promisify(db.run.bind(db));
+const config = require('../config.json')
+const version = config.version
+
 
 async function createOrInsertUser(guildId, userId, userName) {
     try {

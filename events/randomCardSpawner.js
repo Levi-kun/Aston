@@ -34,63 +34,67 @@ function rarityDesignater(rarity) {
     return value;
 }
 
-function addToPlayer(user, card, moveId, guild) {
-    let row = `INSERT INTO owned_Cards${guild.id}  (id, vr, rank, card_id, player_id, realPower,move_ids)`;
+async function addToPlayer(user, card, moveId, guild) {
+    const query = `INSERT INTO "${guild.id}_owned_Cards" (vr, rank, card_id, player_id, realPower, move_ids) VALUES (?, ?, ?, ?, ?, ?)`;
+    
     let power;
-    if (card.power >= 4) {
-        power = Math.floor(card.power * Math.random(0.9, 1.111));
+    if (card.Value >= 4) {
+        power = Math.floor(card.Value * getRandomMultiplier(0.9, 1.111));
     } else {
-        power = Math.floor(card.power * Math.random(0.8, 1.199));
+        power = Math.floor(card.Value * getRandomMultiplier(0.8, 1.199));
     }
 
-    const rowData = animedb.dbAllAsync(row, [
-        version,
-        card.rank,
-        card.id,
-        user.id,
-        power,
-        moveId,
-    ]);
-
-    return rowData;
+    try {
+        const rowData = await dbAllAsync(query, [
+            version,
+            card.Rarity,
+            card.id,
+            user.id,
+            power,
+            moveId,
+        ]);
+        return rowData;
+    } catch (err) {
+        console.error(`Error inserting into ${guild.id}_owned_Cards: ${err.message}`);
+        throw err; // Re-throw the error after logging
+    }
 }
 
-function grabCardMoves(id) {
-    let row = `SELECT * FROM card_moves WHERE id = ? VALUES (${id})`;
-
-    const moves = animedb.dbGetAsync(row);
-
-    let rowId = [];
-
-    moves.map((row) => {
-        rowId.push(row.id);
-    });
-
-    return rowId;
+// Helper function
+function getRandomMultiplier(min, max) {
+    return min + Math.random() * (max - min);
 }
 
-async function messageCreater(image, card, defaultChannel, link) {
+
+    async function grabCardMoves(id) {
+        const query = `SELECT * FROM animeCardMoves WHERE cardId = ?`;
+        let rows = await dbAllAsync(query, [id]);
+    
+        if (!rows || rows.length === 0) {
+            rows = await dbAllAsync(query, [0]);
+        }
+        
+        // Ensure rows is always an array
+        if (!Array.isArray(rows)) {
+            rows = [rows];
+        }
+    
+        // Extract the 'id' from each row
+        const rowIds = rows.map(row => String(row.cardId));
+
+        return rowIds.join(',');
+    }
+    
+    
+
+
+
+async function messageCreater(image, card, defaultChannel, link, guild) {
     const claimButton = new ButtonBuilder()
         .setCustomId("Claim")
         .setLabel("Claim this Card")
         .setStyle(ButtonStyle.Primary);
-    console.log(card);
     const cardEmbed = new EmbedBuilder()
-<<<<<<< HEAD
-    .setColor("000000")
-    .setImage(`${image}`)
-    .setDescription(`[${capitalizeFirstLetter(card.Name)}](${link})`)
-    .addFields(
-		{ name: 'Value', value: `${card.Value}`},
-		{ name: 'Rarity', value: `${rarityDesignater(card.Rarity)}`, inline: true});
-
-        
-     //.setFooter({                           plan on making a database
-       // text: `${timeStamp}`}); 
-
-
-
-=======
         .setColor("000000")
         .setImage(`${image}`)
         .setDescription(`[${capitalizeFirstLetter(card.Name)}](${link})`)
@@ -104,30 +108,8 @@ async function messageCreater(image, card, defaultChannel, link) {
         );
     //.setFooter({                           plan on making a database
     // text: `${timeStamp}`});
->>>>>>> 589aca3188310b85d6ec9162b376db6f6438a416
 
     /*
-
-        Just planning on what i want to happen next:
-
-        A) the card is assign power and moves.
-
-        create a table called owned_Cards_(guild id)
-        SCHEMA:
-        vr NOT NULL
-        timestamp created NOT NULL
-        id NOT NULL PRIMARY_KEY
-        rank NOT NULL
-        card_id NOT NULL
-        player_id NOT NULL
-        realPower
-        move_ids
-        inGroup
-
-
-        B) the player get's the card in their server row.
-        C) the card deletes itself.
-        
 
 
         so basically we should use node-schedule
@@ -148,21 +130,37 @@ async function messageCreater(image, card, defaultChannel, link) {
         embeds: [cardEmbed],
         components: [row],
     });
-    const confirmation = await message.awaitMessageComponent({
+
+    const collectorFilter = (i) => i.customId === "next" || i.customId === "Claim";
+
+    const collector = message.createMessageComponentCollector({
         filter: collectorFilter,
         time: 600_000,
     });
-
-    const nextCollectorFilter = (i) =>
-        i.user.id === interaction.user.id && i.customId === "next";
-    if (confirmation.customId === "Claim") {
-        message.delete();
-
-        addToPlayer(i.user, card, grabCardMoves(card.id), guild);
-        message.channel.send(
-            `${user.name}, congrats on obtaining: ${card.name}`
-        );
-    }
+    
+    collector.on('collect', async (i) => {
+        if (i.customId === "Claim") {
+            await message.delete();
+    
+            try {
+                await addToPlayer(i.user, card, await grabCardMoves(card.id), guild);
+                await message.channel.send(
+                    `${i.user.username}, congrats on obtaining: ${card.Name}`
+                );
+            } catch (err) {
+                console.error(`Error in addToPlayer: ${err.message}`);
+                await message.channel.send(
+                    `Sorry ${i.user.username}, there was an error claiming the card. Please try again later.`
+                );
+            }
+        }
+    });
+    
+    
+    collector.on('end', (collected) => {
+        console.log(`Collected ${collected.size} interactions.`);
+    });
+    
 }
 
 module.exports = {
@@ -171,7 +169,7 @@ module.exports = {
         try {
             // Get all card IDs
             const cardIDRows = await dbAllAsync(
-                `SELECT id FROM "${guild.id}_cards"`
+                `SELECT id FROM "animeCardList"`
             );
             const cardIDArray = cardIDRows.map((row) => row.id);
 
@@ -187,7 +185,7 @@ module.exports = {
 
             // Get the card details
             const card = await dbGetAsync(
-                `SELECT * FROM "${guild.id}_cards" WHERE id = ?`,
+                `SELECT * FROM "animeCardList" WHERE id = ?`,
                 [randomID]
             );
 
@@ -227,14 +225,14 @@ module.exports = {
             // Send messages to the default channel
             const defaultChannel = guild.channels.cache.get(defaultChannelId);
             if (defaultChannel) {
-                messageCreater(image[0], card, defaultChannel, link[0]);
+                await messageCreater(image[0], card, defaultChannel, link[0], guild);
             } else {
                 console.error("Default channel not found");
             }
         } catch (err) {
             console.error(`Error executing spawnInCard: ${err.message}`);
         }
-    },
+    }
 };
 
 // Listen for the 'spawnInCard' event
