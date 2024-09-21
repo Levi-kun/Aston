@@ -1,12 +1,18 @@
 const {
     SlashCommandBuilder,
-    GuildOnboardingPromptOption,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    EmbedBuilder,
+    ComponentType,
 } = require("discord.js");
 const util = require("util");
-const version = 1; // version header
+const sqlite3 = require("sqlite3");
 
-// Promisify db methods
+// Initialize and connect to the SQLite database
+const animedb = new sqlite3.Database("databases/animeDataBase.db")
 
+// Promisify db methods for async/await usage
 const dbAllAsync = util.promisify(animedb.all.bind(animedb));
 const dbGetAsync = util.promisify(animedb.get.bind(animedb));
 
@@ -15,7 +21,7 @@ module.exports = {
     cooldown: 10,
     data: new SlashCommandBuilder()
         .setName("inspect")
-        .setDescription("inspects a card!")
+        .setDescription("Inspects a card!")
         .addStringOption((option) =>
             option
                 .setName("name")
@@ -25,87 +31,135 @@ module.exports = {
         .addUserOption((option) =>
             option
                 .setName("user")
-                .setDescription("What user do you want to use?")
+                .setDescription("Which user do you want to use?")
         ),
     async execute(interaction) {
-        const cardName = interaction.option.getString("name");
+        const cardName = interaction.options.getString("name").toLowerCase(); // Corrected 'options'
+        const user = interaction.options.getUser("user") || interaction.user; // Default to command user if not provided
 
-        let query = `SELECT id FROM animeCardList WHERE Name = ?`;
-        const cardID = dbGetAsync(query, [cardName]);
+        try {
+            // **1. Fetch the Card ID Based on the Card Name**
+            const cardIDRow = await dbGetAsync(
+                `SELECT id FROM animeCardList WHERE Name = ?`,
+                [cardName]
+            );
 
-        query = `SELECT * FROM "${interaction.guild.id}_owned_Cards WHERE player_id = ?, card_id = ?"`;
+            if (!cardIDRow) {
+                return interaction.reply({
+                    content: `No card found with the name "${cardName}".`,
+                    ephemeral: true,
+                });
+            }
 
-        const rows = dbGetAsync(query, [interaction.user.id, cardID]);
-        if (Array.isArray(rows)) {
-            carosole = [];
-            rows.forEach((card) => {
-                carosole.push(rows);
-                interaction.send(carosole[0]);
+            const cardID = cardIDRow.id;
+
+            // **2. Fetch All Owned Cards for the User**
+            // **Fixed SQL Query Syntax**: Added missing closing quotation mark (`"`)
+            const query = `SELECT * FROM "${interaction.guild.id}_owned_Cards" WHERE player_id = ? AND card_id = ?`;
+            const rows = await dbAllAsync(query, [user.id, cardID]);
+
+            if (!rows || rows.length === 0) {
+                return interaction.reply({
+                    content: `${user.username} does not own any cards named "${cardName}".`,
+                    ephemeral: true,
+                });
+            }
+
+            // **3. Fetch Associated Photos**
+            const photoQuery = `
+                SELECT pictureData
+                FROM animeCardPictures
+                WHERE cardId = ?
+            `;
+            const photos = await dbAllAsync(photoQuery, [cardID]);
+
+            // **4. Prepare the Carousel Data**
+            let currentIndex = 0; // Starting index for the carousel
+
+            // **5. Generate Embeds with Images**
+            // Function to generate an embed for a given card and image
+            const generateEmbed = (card, index, total, photoUrl) => {
+                return new EmbedBuilder()
+                    .setTitle(`Card: ${cardName}`) // Using cardName as per your data
+                    .setDescription(
+                        `**ID:** ${card.id}\n**Rank:** ${card.rank}\n**Power:** ${card.realPower}`
+                    )
+                    .setImage(photoUrl || "https://example.com/default-card-image.png") // Replace with your default image URL
+                    .setFooter({ text: `Card ${index + 1} of ${total}` });
+            };
+
+            // **6. Initialize the Embed with the First Card and Photo**
+            const initialPhoto =
+                photos.length > 0 ? photos[0].pictureData : "https://example.com/default-card-image.png"; // Replace with your default image URL
+            const embed = generateEmbed(rows[currentIndex], currentIndex, rows.length, initialPhoto);
+
+            // **7. Create Navigation Buttons**
+            const leftButton = new ButtonBuilder()
+                .setCustomId("left")
+                .setLabel("◀️")
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(true); // Initially disabled since we're at the first card
+
+            const rightButton = new ButtonBuilder()
+                .setCustomId("right")
+                .setLabel("▶️")
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(rows.length === 1); // Disabled if only one card
+
+            const actionRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
+
+            // **8. Send the Initial Message with Embed and Buttons**
+            const message = await interaction.reply({
+                embeds: [embed],
+                components: [actionRow],
+                fetchReply: true,
             });
-        } else {
-            interaction.send(rows.Name);
-        }
 
-        /* 
-        create a table called owned_Cards_(guild id)
-        SCHEMA:
-        vr NOT NULL
-        timestamp created NOT NULL
-        id NOT NULL PRIMARY_KEY
-        rank NOT NULL
-        card_id NOT NULL
-        player_id NOT NULL
-        realPower
-        move_ids
-        inGroup
-        */
+            // **9. Create a Collector to Handle Button Interactions**
+            const collector = message.createMessageComponentCollector({
+                componentType: ComponentType.Button,
+                time: 600000, // 10 minutes
+            });
+
+            collector.on("collect", async (i) => {
+                if (i.user.id !== interaction.user.id) {
+                    return i.reply({
+                        content: "You cannot interact with these buttons.",
+                        ephemeral: true,
+                    });
+                }
+
+                // **10. Update the Current Index Based on Button Clicked**
+                if (i.customId === "left") {
+                    currentIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+                } else if (i.customId === "right") {
+                    currentIndex = currentIndex < rows.length - 1 ? currentIndex + 1 : currentIndex;
+                }
+
+                // **12. Generate the New Embed**
+                const newEmbed = generateEmbed(rows[currentIndex], currentIndex, rows.length, photos[0].pictureData);
+
+                // **13. Update Button States**
+                leftButton.setDisabled(currentIndex === 0);
+                rightButton.setDisabled(currentIndex === rows.length - 1);
+                const newActionRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
+
+                // **14. Edit the Original Message with the New Embed and Updated Buttons**
+                await i.update({
+                    embeds: [newEmbed],
+                    components: [newActionRow],
+                });
+            });
+
+            collector.on("end", () => {
+                // **15. Disable Buttons After Collector Ends**
+                leftButton.setDisabled(true);
+                rightButton.setDisabled(true);
+                const disabledRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
+                message.edit({ components: [disabledRow] }).catch(console.error);
+            });
+        } catch (e) {
+            console.log(e)
+        }
     },
 };
-
-async function buttonCreater(message) {
-    const left = new ButtonBuilder()
-        .setCustomId("left")
-        .setLabel("Claim this Card")
-        .setStyle(ButtonStyle.Primary);
-    const right = new ButtonBuilder()
-        .setCustomId("right")
-        .setLabel("Claim this Card")
-        .setStyle(ButtonStyle.Primary);
-
-    const row = new ActionRowBuilder().addComponents([left, right]);
-
-    const collectorFilter = (i) =>
-        i.customId === "next" || i.customId === "Claim";
-
-    const collector = message.createMessageComponentCollector({
-        filter: collectorFilter,
-        time: 600_000,
-    });
-
-    collector.on("collect", async (i) => {
-        if (i.customId === "Claim") {
-            await message.delete();
-
-            try {
-                await addToPlayer(
-                    i.user,
-                    card,
-                    await grabCardMoves(card.id),
-                    guild
-                );
-                await message.channel.send(
-                    `${i.user.username}, congrats on obtaining: ${card.Name}`
-                );
-            } catch (err) {
-                console.error(`Error in addToPlayer: ${err.message}`);
-                await message.channel.send(
-                    `Sorry ${i.user.username}, there was an error claiming the card. Please try again later.`
-                );
-            }
-        }
-    });
-
-    collector.on("end", (collected) => {
-        console.log(`Collected ${collected.size} interactions.`);
-    });
-}

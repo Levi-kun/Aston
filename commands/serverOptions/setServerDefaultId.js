@@ -44,39 +44,23 @@ module.exports = {
         .setName("defaultchannel")
         .setDescription("Wanna change the default channel?")
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-
-        .addBooleanOption(
-            (option) =>
-                option
-                    .setName("fetchid")
-                    .setDescription("Fetches the current default ID")
-                    .setRequired(true) // Make fetchid required
-        )
         .addChannelOption(
             (option) =>
                 option
                     .setName("channel")
                     .setDescription("Which channel, boss?")
-                    .setRequired(false) // Channel is optional if fetchid is provided
+                    .setRequired(true) // Channel is optional if fetchid is provided
         ),
     async execute(interaction) {
-        const booleanOption = interaction.options.getBoolean("fetchid");
         const channelId = interaction.options.getChannel("channel");
 
-        if (!booleanOption && channelId) {
+        if (channelId) {
             await updateChannelId(interaction.guild.id, channelId.id);
             await interaction.reply(
-                `${interaction.member.displayName}, ${channelId} is now the new default channel!`
-            );
-        } else if (booleanOption) {
-            const currentChannelId = await fetchChannelId(interaction.guild.id);
-            await interaction.reply(
-                `The current default channel ID is: ${currentChannelId}`
+                {content: `${interaction.member.displayName}, ${channelId} is now the new default channel!`, ephemeral: true}
             );
         } else {
-            await interaction.reply(
-                "You need to specify a channel to set or choose fetchid to retrieve the current ID."
-            );
+            await interaction.reply("boss something went wrong...")
         }
     },
 };

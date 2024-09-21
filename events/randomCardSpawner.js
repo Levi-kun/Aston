@@ -116,6 +116,7 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
 
         CREATE TABLE IF NOT EXISTS server_settings (
     guild_id TEXT PRIMARY KEY,
+    day_id,
     numbersDaily INTEGER DEFAULT 10,
     cardsToday INTEGER DEFAULT 0,
     lastReset TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -201,7 +202,7 @@ module.exports = {
             );
 
             if (!guildData) {
-                console.error("Guild data not found");
+                console.error("Guild data not found", guild.id, guild.name);
                 return;
             }
 
