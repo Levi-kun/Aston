@@ -1,11 +1,10 @@
 const { Events } = require("discord.js");
 const eventEmitter = require("../src/eventManager");
-const schedule = require(('node-schedule'))
-const sqlite3 = require('sqlite3')
+const schedule = require("node-schedule");
+const sqlite3 = require("sqlite3");
 const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
 const util = require("util");
 const dbAllAsync = util.promisify(db.all.bind(db));
-
 
 const serverSchedules = new Map();
 
@@ -28,7 +27,7 @@ async function getAmountPerServer(guildId) {
 }
 
 async function scheduleRandomJobsForServer(guild) {
-    const guildId = guild.id
+    const guildId = guild.id;
 
     const guildExists = await isGuildInTable(guildId);
 
@@ -36,18 +35,16 @@ async function scheduleRandomJobsForServer(guild) {
         return; // Exit the function if the guild is not in the table
     }
 
-
     try {
         const amountPerDay = await getAmountPerServer(guildId);
 
         if (amountPerDay === 0) {
-            
             return; // Exit if no jobs need to be scheduled
         }
 
         // Clear any existing schedules for the server
         if (serverSchedules.has(guildId)) {
-            serverSchedules.get(guildId).forEach(job => job.cancel());
+            serverSchedules.get(guildId).forEach((job) => job.cancel());
             serverSchedules.delete(guildId);
         }
 
@@ -58,7 +55,6 @@ async function scheduleRandomJobsForServer(guild) {
             scheduledTimes.push(randomTime);
 
             const job = schedule.scheduleJob(randomTime, () => {
-       
                 eventEmitter.emit("spawnInCard", guild); // Trigger your event
             });
 
@@ -68,7 +64,6 @@ async function scheduleRandomJobsForServer(guild) {
 
             serverSchedules.get(guildId).push(job);
         }
-
     } catch (error) {
         console.error(`Failed to schedule jobs for guild ${guildId}:`, error);
     }
@@ -76,17 +71,16 @@ async function scheduleRandomJobsForServer(guild) {
 
 // Function to schedule daily reset at midnight
 function scheduleDailyReset() {
-    schedule.scheduleJob('0 0 * * *', async () => {
-        client.guilds.cache.forEach(async guild => {
+    schedule.scheduleJob("0 0 * * *", async () => {
+        client.guilds.cache.forEach(async (guild) => {
             await scheduleRandomJobsForServer(guild.id);
         });
     });
 }
 
-
 async function isGuildInTable(guildId) {
     const query = `SELECT * FROM guildTable WHERE guildID = ?`;
-    
+
     try {
         const result = await dbAllAsync(query, [guildId]);
         return result.length > 0; // Return true if guild exists, otherwise false
@@ -96,19 +90,14 @@ async function isGuildInTable(guildId) {
     }
 }
 
-
-
 module.exports = {
     name: Events.ClientReady,
     once: true,
     execute(client) {
+        client.guilds.cache.forEach((guild) => {
+            scheduleRandomJobsForServer(guild);
+        });
 
-        client.guilds.cache.forEach(guild => {
-        scheduleRandomJobsForServer(guild);
-        
-    });
-
-    scheduleDailyReset()
-
+        scheduleDailyReset();
     },
 };
