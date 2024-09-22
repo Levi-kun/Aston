@@ -19,15 +19,14 @@ const dbGetAsync = util.promisify(animedb.get.bind(animedb));
 function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
-
 function rarityDesignater(rarity) {
-    let value = "D";
+    let value = "C";
     if (rarity <= 2) {
-        value = "C";
-    } else if (rarity <= 3) {
         value = "B";
-    } else if (rarity <= 4) {
+    } else if (rarity <= 3) {
         value = "A";
+    } else if (rarity <= 4) {
+        value = "S";
     } else if (rarity <= 5) {
         value = "S+";
     }
