@@ -11,6 +11,7 @@ module.exports = {
     category: "admin",
     data: new SlashCommandBuilder()
         .setName("editimage")
+        .setDMPermission(false)
         .setDescription(
             "Add, update, or remove an image from the anime card pictures database"
         )

@@ -65,7 +65,7 @@ function getRandomMultiplier(min, max) {
 }
 
 
-    async function grabCardMoves(id) {
+async function grabCardMoves(id) {
         const query = `SELECT * FROM animeCardMoves WHERE cardId = ?`;
         let rows = await dbAllAsync(query, [id]);
     
@@ -82,7 +82,7 @@ function getRandomMultiplier(min, max) {
         const rowIds = rows.map(row => String(row.cardId));
 
         return rowIds.join(',');
-    }
+}
     
     
 
@@ -158,6 +158,7 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
     
     
     collector.on('end', (collected) => {
+        message.delete()
         console.log(`Collected ${collected.size} interactions.`);
     });
     

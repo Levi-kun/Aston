@@ -35,6 +35,7 @@ module.exports = {
     cooldown: 10,
     data: new SlashCommandBuilder()
         .setName("inspect")
+        .setDMPermission(false)
         .setDescription("Inspects a card!")
         .addStringOption((option) =>
             option
