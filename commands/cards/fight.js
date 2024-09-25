@@ -9,7 +9,7 @@ const {
 } = require("discord.js");
 const { Battle, Card } = require("../../classes/cardManager.js"); 
 
-const sqlite3 = require("sqlite3")
+const sqlite3 = require("sqlite3");
 const util = require("util");
 
 const animedb = new sqlite3.Database("databases/animeDataBase.db");
@@ -19,8 +19,6 @@ const requiredCards = 4;
 const dbAllAsync = util.promisify(animedb.all.bind(animedb));
 const dbGetAsync = util.promisify(animedb.get.bind(animedb));
 const dbRunAsync = util.promisify(animedb.run.bind(animedb));
-
-
 
 module.exports = {
     category: "cards",
@@ -97,7 +95,7 @@ module.exports = {
             const challengeEmbed = new EmbedBuilder()
                 .setTitle("New Challenge!")
                 .setDescription(
-                    `${challenger} has challenged you to a battle!\nDo you accept?`
+                    `${challenger} has challenged you to a battle!\nDo you **accept**?`
                 )
                 .setColor("#13699c")
                 .setTimestamp();
@@ -214,53 +212,20 @@ async function initiateCardSelection(interaction, battle, challenger, challenged
         }
 
         // Start card selection for both players
-        const selectedChallengerCards = await selectCards(
-            challenger,
-            challengerCards,
-            "Challenger",
-            guildId
-        );
-        const selectedChallengedCards = await selectCards(
-            challenged,
-            challengedCards,
-            "Challenged",
-            guildId
-        );
-
-        if (!selectedChallengerCards || !selectedChallengedCards) {
-            // One of the players failed to select cards in time
-            await battle.updateStatus('declined');
-            if (!selectedChallengerCards) {
-                await challenger.send(
-                    "You did not select your cards in time. The PvP battle has been canceled."
-                ).catch(() => {});
-            }
-            if (!selectedChallengedCards) {
-                await challenged.send(
-                    "You did not select your cards in time. The PvP battle has been canceled."
-                ).catch(() => {});
-            }
-            return;
-        }
-
+        // Additional card selection logic can be implemented here as needed
         // Initialize battle with selected cards and their powers
-        const initialPowersChallenger = selectedChallengerCards.map(card => card.realPower);
-        const initialPowersChallenged = selectedChallengedCards.map(card => card.realPower);
+        const initialPowersChallenger = challengerCards.map(card => card.realPower);
+        const initialPowersChallenged = challengedCards.map(card => card.realPower);
 
         await battle.initializeBattle(
-            selectedChallengerCards.map(card => card.id),
-            selectedChallengedCards.map(card => card.id),
+            challengerCards.map(card => card.id),
+            challengedCards.map(card => card.id),
             initialPowersChallenger,
             initialPowersChallenged
         );
 
-        // Send the battle embed in the channel
-        const battleEmbed = await battle.generateBattleEmbed(interaction.client);
-        const battleMessage = await interaction.channel.send({ embeds: [battleEmbed] });
-
-        // Create control buttons for both players
-        await createControlButtons(challenger, battleMessage.id, guildId);
-        await createControlButtons(challenged, battleMessage.id, guildId);
+        // Start the battle loop
+        await battle.startBattleLoop(interaction);
     } catch (error) {
         console.error(`Error initiating card selection: ${error}`);
         await interaction.followUp({
@@ -268,154 +233,4 @@ async function initiateCardSelection(interaction, battle, challenger, challenged
             ephemeral: true,
         });
     }
-}
-
-/**
- * Allows a user to select a specified number of cards for the battle.
- * Utilizes the Card class for better object management.
- * @param {User} user - The Discord user.
- * @param {Array<Card>} userCards - The user's owned Card instances.
- * @param {string} role - The role of the user (e.g., "Challenger").
- * @param {string} guildId - The Discord guild ID.
- * @returns {Promise<Array<Card>|null>} - Selected Card instances or null if selection failed.
- */
-async function selectCards(user, userCards, role, guildId) {
-    const {
-        ActionRowBuilder,
-        SelectMenuBuilder,
-        EmbedBuilder,
-    } = require("discord.js");
-
-    const options = userCards.map((card) => {
-        return {
-            label: card.Name,
-            description: `Rank: ${card.Rank}, Power: ${card.realPower}`,
-            value: `${card.id}`,
-        };
-    });
-
-    const embed = new EmbedBuilder()
-        .setTitle(`${role} Card Selection`)
-        .setDescription(`Please select **exactly ${requiredCards}** cards for the battle.`)
-        .setColor("#15733a");
-
-    const selectMenu = new SelectMenuBuilder()
-        .setCustomId(`select_cards_${guildId}_${user.id}`)
-        .setPlaceholder(`Select ${requiredCards} cards`)
-        .setMinValues(requiredCards)
-        .setMaxValues(requiredCards)
-        .addOptions(options);
-
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-
-    try {
-        const dmChannel = await user.createDM();
-        const message = await dmChannel.send({ embeds: [embed], components: [row] });
-
-        // Create a collector for the selection
-        const filter = (i) =>
-            i.customId === `select_cards_${guildId}_${user.id}` &&
-            i.user.id === user.id;
-
-        const collector = message.createMessageComponentCollector({
-            filter,
-            max: 1,
-            time: 120000, // 2 minutes
-        });
-
-        const selectedCards = await new Promise((resolve) => {
-            collector.on("collect", async (interaction) => {
-                const selected = interaction.values;
-                if (selected.length !== requiredCards) {
-                    await interaction.reply({
-                        content: `You must select exactly ${requiredCards} cards.`,
-                        ephemeral: true,
-                    });
-                    resolve(null);
-                    return;
-                }
-
-                await interaction.update({
-                    content: "Cards selected!",
-                    components: [],
-                });
-
-                // Map selected card IDs to Card instances
-                const selectedCardInstances = userCards.filter(card =>
-                    selected.includes(String(card.id))
-                );
-
-                resolve(selectedCardInstances);
-            });
-
-            collector.on("end", async (collected) => {
-                if (collected.size === 0) {
-                    await user.send(
-                        "You did not select your cards in time. The PvP battle has been canceled."
-                    ).catch(() => {});
-                    resolve(null);
-                }
-            });
-        });
-
-        if (!selectedCards) return null;
-
-        return selectedCards;
-    } catch (error) {
-        console.error(`Could not send DM to ${user.tag}.`, error);
-        return null;
-    }
-}
-
-/**
- * Creates control buttons for a user to perform actions during the battle.
- * @param {User} user - The Discord user.
- * @param {string} battleMessageId - The message ID of the battle.
- * @param {string} guildId - The Discord guild ID.
- */
-async function createControlButtons(user, battleMessageId, guildId) {
-    const {
-        ButtonBuilder,
-        ButtonStyle,
-        ActionRowBuilder,
-    } = require("discord.js");
-
-    const move0 = new ButtonBuilder()
-        .setCustomId(`move_0_${guildId}_${battleMessageId}_${user.id}`)
-        .setLabel("0")
-        .setStyle(ButtonStyle.Primary);
-
-    const move1 = new ButtonBuilder()
-        .setCustomId(`move_1_${guildId}_${battleMessageId}_${user.id}`)
-        .setLabel("1")
-        .setStyle(ButtonStyle.Primary);
-
-    const move2 = new ButtonBuilder()
-        .setCustomId(`move_2_${guildId}_${battleMessageId}_${user.id}`)
-        .setLabel("2")
-        .setStyle(ButtonStyle.Primary);
-
-    const inspectButton = new ButtonBuilder()
-        .setCustomId(`inspect_${guildId}_${battleMessageId}_${user.id}`)
-        .setLabel("Inspect")
-        .setStyle(ButtonStyle.Secondary);
-
-    const changeCardButton = new ButtonBuilder()
-        .setCustomId(`change_card_${guildId}_${battleMessageId}_${user.id}`)
-        .setLabel("Change Card")
-        .setStyle(ButtonStyle.Danger);
-
-    const row = new ActionRowBuilder().addComponents(
-        move0,
-        move1,
-        move2,
-        inspectButton,
-        changeCardButton
-    );
-
-    // Send the ephemeral message with buttons
-    user.send({
-        content: "Choose your move:",
-        components: [row],
-    }).catch(() => {});
 }

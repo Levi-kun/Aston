@@ -1,7 +1,7 @@
-
-const { Collection } = require("discord.js");
-const sqlite3 = require("sqlite3")
+const { Collection, Guild } = require("discord.js");
+const sqlite3 = require("sqlite3");
 const util = require("util");
+const bot = require("../client.js");
 
 // Initialize and connect to the SQLite database
 const animedb = new sqlite3.Database("databases/animeDataBase.db");
@@ -12,7 +12,6 @@ const dbAllAsync = util.promisify(animedb.all.bind(animedb));
 const dbGetAsync = util.promisify(animedb.get.bind(animedb));
 const dbRunAsync = util.promisify(animedb.run.bind(animedb));
 
-
 class Battle {
     constructor(battleData) {
         this.battleId = battleData.battle_id;
@@ -20,167 +19,207 @@ class Battle {
         this.challengerId = battleData.challenger_id;
         this.challengedId = battleData.challenged_id;
         this.status = battleData.status;
-        this.currentTurn = battleData.current_turn;
+        this.currentTurn = 'challenger'; // Default turn
+
         this.challengerCards = JSON.parse(battleData.challenger_cards || "[]");
         this.challengedCards = JSON.parse(battleData.challenged_cards || "[]");
-        this.challengerPowers = JSON.parse(battleData.challenger_powers || "[]");
-        this.challengedPowers = JSON.parse(battleData.challenged_powers || "[]");
+        this.battleMessages = {}; // Tracks message IDs
+        this.lastMove = ''; // Stores the description of the last move
     }
-
-    /**
-     * Creates a new battle entry in the database.
-     * @param {string} guildId 
-     * @param {string} challengerId 
-     * @param {string} challengedId 
-     * @returns {Promise<Battle>}
-     */
+    
+    
     static async createBattle(guildId, challengerId, challengedId) {
-        const query = `
-            INSERT INTO pvpBattles (guild_id, challenger_id, challenged_id, current_turn, status)
-            VALUES (?, ?, ?, 0, 'pending')
-        `;
-        const result = await dbRunAsync(query, [guildId, challengerId, challengedId])
-    }
+        try {
+            // Insert a new battle entry into the database with a default 'pending' status
+            const insertBattleQuery = `
+                INSERT INTO pvpBattles (guild_id, challenger_id, challenged_id, status)
+                VALUES (?, ?, ?, 'pending')
+            `;
 
-    /**
-     * Retrieves a battle from the database by its ID.
-     * @param {number} battleId 
-     * @returns {Promise<Battle|null>}
-     */
-    static async getBattleById(battleId) {
-        const query = `SELECT * FROM pvpBattles WHERE battle_id = ?`;
-        const row = await dbGetAsync(query, [battleId])
-        if (row) {
-            return new Battle(row);
+            await dbRunAsync(insertBattleQuery, [guildId, challengerId, challengedId]);
+
+            // Retrieve the newly created battle ID
+            const selectQuery = `
+                SELECT battle_id 
+                FROM pvpBattles 
+                WHERE guild_id = ? AND challenger_id = ? AND challenged_id = ? 
+                ORDER BY battle_id DESC LIMIT 1
+            `;
+            const result = await dbGetAsync(selectQuery, [guildId, challengerId, challengedId]);
+
+            if (!result) throw new Error('Failed to retrieve the created battle.');
+
+            // Return a new Battle instance using the retrieved battleId
+            return new Battle(result.battle_id, guildId, challengerId, challengedId);
+        } catch (error) {
+            console.error(`Error creating battle: ${error.message}`);
+            throw error;
+        } finally {
+            db.close();
         }
-        return null;
     }
 
-    /**
-     * Retrieves an ongoing battle for a user in a guild.
-     * @param {string} guildId 
-     * @param {string} userId 
-     * @returns {Promise<Battle|null>}
-     */
-    static async getOngoingBattle(guildId, userId) {
-        const query = `
-            SELECT * FROM pvpBattles 
-            WHERE guild_id = ? 
-              AND (challenger_id = ? OR challenged_id = ?) 
-              AND status = 'ongoing'
-        `;
-        const row = await dbGetAsync(query, [guildId, userId, userId]);
-        if (row) {
-            return new Battle(row);
+
+    /** Helper to get a player by ID */
+    async getPlayerFromId(id) {
+        return this.getGuild().members.fetch(id);
+    }
+
+    /** Fetch guild from cache or Discord API */
+    async getGuild() {
+        const guild = bot.guilds.cache.get(this.guildId) || await bot.guilds.fetch(this.guildId);
+        if (!guild) {
+            console.error(`Guild with ID ${this.guildId} not found`);
+            return null;
         }
-        return null;
+        return guild;
     }
 
-    /**
-     * Updates the battle status.
-     * @param {string} newStatus 
-     * @returns {Promise<void>}
-     */
-    async updateStatus(newStatus) {
-        const query = `UPDATE pvpBattles SET status = ? WHERE battle_id = ?`;
-        await dbRunAsync(query, [newStatus, this.battleId]);
+    /** Save battle turn and status updates */
+    async updateTurnAndStatus(newStatus = this.status) {
+        const query = `UPDATE pvpBattles SET current_turn = ?, status = ? WHERE battle_id = ?`;
+        await dbRunAsync(query, [this.currentTurn, newStatus, this.battleId]);
         this.status = newStatus;
     }
 
-    /**
-     * Handles a forfeit action.
-     * @param {string} loserId 
-     * @returns {Promise<{winnerId: string, battle: Battle}>}
-     */
-    async forfeit(loserId) {
-        if (![this.challengerId, this.challengedId].includes(loserId)) {
-            throw new Error("User is not part of this battle.");
+    /** Initializes battle and selects who goes first */
+    async initializeBattle(challengerCards, challengedCards) {
+        this.challengerCards = await Card.getCardsByIds(challengerCards, this.guildId);
+        this.challengedCards = await Card.getCardsByIds(challengedCards, this.guildId);
+
+        this.activeChallengerCard = this.challengerCards[0];
+        this.activeChallengedCard = this.challengedCards[0];
+
+        await this.chooseFirstPlayer();
+        await this.startBattleLoop();
+    }
+
+    /** Determines who goes first */
+    async chooseFirstPlayer() {
+        const firstPlayer = Math.random() < 0.5 ? this.challengerId : this.challengedId;
+        this.currentTurn = firstPlayer;
+    }
+
+    /** Main battle loop */
+    async startBattleLoop() {
+        await this.sendFieldUpdate();
+        await this.sendTurnPrompt();
+    }
+
+    /** Send a turn prompt to the active player */
+    async sendTurnPrompt() {
+        const currentPlayer = this.currentTurn === 'challenger' ? this.challengerId : this.challengedId;
+        const player = await this.getPlayerFromId(currentPlayer);
+        const row = this.createControlButtons();
+
+        const dmChannel = await player.createDM();
+        await dmChannel.send({
+            content: `Your turn!`,
+            components: [row],
+        });
+    }
+
+    /** Handle move made by player */
+    async handleMove(playerId, moveId) {
+        const isChallenger = playerId === this.challengerId;
+        const activeCard = isChallenger ? this.activeChallengerCard : this.activeChallengedCard;
+        const move = activeCard.MoveSet[moveId];
+
+        this.lastMove = `${activeCard.Name} uses ${move.name}`;
+        this.currentTurn = isChallenger ? this.challengedId : this.challengerId;
+
+        await this.updateTurnAndStatus();
+        await this.sendFieldUpdate();
+        await this.startBattleLoop(); // Continue battle
+    }
+
+    /** Sends an update to the battle field */
+    async sendFieldUpdate() {
+        const embed = this.generateFieldEmbed();
+        const channel = await this.getBattleChannel();
+
+        if (this.battleMessages.fieldMessage) {
+            const message = await channel.messages.fetch(this.battleMessages.fieldMessage);
+            await message.edit({ embeds: [embed] });
+        } else {
+            const message = await channel.send({ embeds: [embed] });
+            this.battleMessages.fieldMessage = message.id;
+        }
+    }
+
+    /** Generate an embed for the battle field */
+    generateFieldEmbed() {
+        return {
+            title: "Battlefield",
+            description: `Challenger's Card: ${this.activeChallengerCard.Name} | Power: ${this.activeChallengerCard.realPower}\nChallenged's Card: ${this.activeChallengedCard.Name} | Power: ${this.activeChallengedCard.realPower}`,
+            color: 0x2ECC71,
+        };
+    }
+
+    /** Determines the winner of the battle */
+    getWinner() {
+        if (this.challengerCards.length === 0) return this.challengedId;
+        if (this.challengedCards.length === 0) return this.challengerId;
+        return null;
+    }
+
+    /** Ends the battle and announces the winner */
+    async endBattle(winnerId) {
+        const winner = await this.getPlayerFromId(winnerId);
+        const embed = { title: `${winner.username} Wins!`, color: 0x3498DB };
+
+        const channel = await this.getBattleChannel();
+        await channel.send({ embeds: [embed] });
+
+        // Clean up messages
+        for (const msgId of Object.values(this.battleMessages)) {
+            const message = await channel.messages.fetch(msgId);
+            if (message) await message.delete();
         }
 
-        const winnerId = this.challengerId === loserId ? this.challengedId : this.challengerId;
-        await this.updateStatus(winnerId); // Assuming 'status' can hold winnerId
-        return { winnerId, battle: this };
+        await this.rewardPlayers(winnerId);
+        await this.updateTurnAndStatus('ended');
     }
 
-    /**
-     * Initializes the battle by setting it to 'ongoing' and optionally assigning selected cards.
-     * @param {Array<number>} challengerCardIds 
-     * @param {Array<number>} challengedCardIds 
-     * @param {Array<number>} challengerPowers 
-     * @param {Array<number>} challengedPowers 
-     * @returns {Promise<void>}
-     */
-    async initializeBattle(challengerCardIds, challengedCardIds, challengerPowers, challengedPowers) {
-        const query = `
-            UPDATE pvpBattles 
-            SET status = 'ongoing',
-                challenger_cards = ?,
-                challenged_cards = ?,
-                challenger_powers = ?,
-                challenged_powers = ?
-            WHERE battle_id = ?
-        `;
-        await dbRunAsync(query, [
-            JSON.stringify(challengerCardIds),
-            JSON.stringify(challengedCardIds),
-            JSON.stringify(challengerPowers),
-            JSON.stringify(challengedPowers),
-            this.battleId
-        ]);
-        this.status = 'ongoing';
-        this.challengerCards = challengerCardIds;
-        this.challengedCards = challengedCardIds;
-        this.challengerPowers = challengerPowers;
-        this.challengedPowers = challengedPowers;
+    /** Reward users for win/loss */
+    async rewardPlayers(winnerId) {
+        const loserId = winnerId === this.challengerId ? this.challengedId : this.challengerId;
+
+        await this.rewardUser(winnerId, 1); // 1 for win
+        await this.rewardUser(loserId, -1); // -1 for loss
     }
 
-    /**
-     * Generates an embed representing the current state of the battle.
-     * @param {Client} client - The Discord client.
-     * @returns {Promise<EmbedBuilder>}
-     */
-    async generateBattleEmbed(client) {
-        const challenger = await client.users.fetch(this.challengerId);
-        const challenged = await client.users.fetch(this.challengedId);
+    /** Helper to reward a user */
+    async rewardUser(userId, increment) {
+        const column = increment > 0 ? "wins" : "losses";
+        const query = `UPDATE ${this.guildId}_users SET ${column} = ${column} + 1 WHERE user_id = ?`;
+        await dbRunAsync(query, [userId]);
+    }
 
-        // Fetch Card details
-        const challengerCards = await Card.getCardsByIds(this.challengerCards, this.guildId);
-        const challengedCards = await Card.getCardsByIds(this.challengedCards, this.guildId);
+    /** Fetch the battle channel */
+    async getBattleChannel() {
+        const guild = await this.getGuild();
+        return guild.channels.cache.find(channel => channel.name === 'battle-channel');
+    }
 
-        const embed = new EmbedBuilder()
-            .setTitle("PvP Battle")
-            .setDescription("The battle is in progress!")
-            .setColor("#931ea8")
-            .setTimestamp();
-
-        // Challenger's Cards
-        const challengerField = challengerCards
-            .map((card, index) => `**${card.Name}**\nPower: ${this.challengerPowers[index]}`)
-            .join("\n\n");
-
-        // Challenged's Cards
-        const challengedField = challengedCards
-            .map((card, index) => `**${card.Name}**\nPower: ${this.challengedPowers[index]}`)
-            .join("\n\n");
-
-        embed.addFields(
-            {
-                name: `${challenger.username}'s Cards`,
-                value: challengerField || "No cards selected.",
-                inline: true,
-            },
-            {
-                name: `${challenged.username}'s Cards`,
-                value: challengedField || "No cards selected.",
-                inline: true,
-            }
+    /** Creates the control buttons for moves */
+    createControlButtons() {
+        const row = new ActionRowBuilder();
+        for (let i = 0; i < 3; i++) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`move_${i}_${this.battleId}`)
+                    .setLabel(`Move ${i + 1}`)
+                    .setStyle(ButtonStyle.Primary)
+            );
+        }
+        row.addComponents(
+            new ButtonBuilder().setCustomId(`change_card_${this.battleId}`).setLabel("Change Card").setStyle(ButtonStyle.Danger)
         );
-
-        return embed;
+        return row;
     }
-
-    // Additional methods like handling turns, calculating results, etc., can be added here.
 }
+
 
 
 
