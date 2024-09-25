@@ -24,7 +24,6 @@ module.exports = {
     category: "cards",
     data: new SlashCommandBuilder()
         .setName("challenge")
-        .setDMPermission(false)
         .setDescription("Boss, you're gonna challenge another user to a PvP battle? Good Luck.")
         .addUserOption((option) =>
             option
