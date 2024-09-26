@@ -26,7 +26,31 @@ class Battle {
         this.battleMessages = {}; // Tracks message IDs
         this.lastMove = ''; // Stores the description of the last move
     }
-    
+    static async getOngoingBattle(playerId) {
+        try {
+            // Query to check if the player is involved in any ongoing battle
+            const query = `
+                SELECT * 
+                FROM pvpBattles 
+                WHERE guild_id = ? 
+                AND (challenger_id = ? OR challenged_id = ?)
+                AND current_turn >= 0
+                LIMIT 1
+            `;
+            const result = await dbGetAsync(query, [this.guildId, playerId, playerId]);
+
+            // If a result is found, return a new Battle instance
+            if (result) {
+                return true
+            }
+
+            // Return null if no ongoing battle is found
+            return false;
+    } catch (e) {
+        console.error(e)
+    }
+};
+
     
     static async createBattle(guildId, challengerId, challengedId) {
         try {
@@ -54,9 +78,7 @@ class Battle {
         } catch (error) {
             console.error(`Error creating battle: ${error.message}`);
             throw error;
-        } finally {
-            db.close();
-        }
+        } 
     }
 
 
@@ -82,6 +104,7 @@ class Battle {
         this.status = newStatus;
     }
 
+
     /** Initializes battle and selects who goes first */
     async initializeBattle(challengerCards, challengedCards) {
         this.challengerCards = await Card.getCardsByIds(challengerCards, this.guildId);
@@ -99,7 +122,23 @@ class Battle {
         const firstPlayer = Math.random() < 0.5 ? this.challengerId : this.challengedId;
         this.currentTurn = firstPlayer;
     }
+    async updateStatus(newStatus) {
 
+        try {
+            const query = `
+                UPDATE pvpBattles
+                SET status = ?
+                WHERE battle_id = ?
+            `;
+            await dbRunAsync(query, [newStatus, this.battleId]);
+    
+            // Update the instance's status as well
+            this.status = newStatus;
+        } catch (error) {
+            console.error(`Error updating battle status: ${error.message}`);
+            throw error;
+        } 
+    }
     /** Main battle loop */
     async startBattleLoop() {
         await this.sendFieldUpdate();
@@ -230,10 +269,9 @@ class Card {
     constructor(data, moveSet) {
         this.id = data.id;
         this.Name = data.Name;
-        this.Description = data.Description;
-        this.Type = data.type;
+        this.category = data.category;
         this.Damage = data.dmg;
-        this.SpecialType = data.specialType;
+        this.Specialcategory = data.specialcategory;
         this.OwnModifier = data.ownModifier;
         this.OtherModifier = data.otherModifier;
         this.Power = data.Power;
@@ -256,7 +294,7 @@ class Card {
 
         const placeholders = cardIds.map(() => '?').join(',');
         const query = `
-            SELECT oc.card_id as id, acl.Name, acl.Description, acl.type, acl.dmg, acl.specialType, 
+            SELECT oc.card_id as id, acl.Name, acl.category, acl.dmg, acl.specialcategory, 
                    acl.ownModifier, acl.otherModifier, oc.realPower, acl.Power, oc.vr, oc.rank, 
                    oc.player_id, oc.inGroup
             FROM "${guildId}_owned_Cards" oc
@@ -277,7 +315,7 @@ class Card {
      */
     static async getUserCards(userId, guildId) {
         const query = `
-            SELECT oc.card_id as id, acl.Name, acl.Description, acl.type, acl.dmg, acl.specialType, 
+            SELECT oc.card_id as id, acl.Name, acl.category, acl.dmg, acl.specialcategory, 
                    acl.ownModifier, acl.otherModifier, oc.realPower, acl.Power, oc.vr, oc.rank, 
                    oc.player_id, oc.inGroup
             FROM "${guildId}_owned_Cards" oc
@@ -297,10 +335,9 @@ class Card {
     getDetails() {
         return `
 **Name:** ${this.Name}
-**Description:** ${this.Description}
-**Type:** ${this.Type}
+**category:** ${this.category}
 **Damage:** ${this.Damage}
-**Special Type:** ${this.SpecialType}
+**Special category:** ${this.Specialcategory}
 **Own Modifier:** ${this.OwnModifier}
 **Other Modifier:** ${this.OtherModifier}
 **Power:** ${this.Power}
@@ -318,9 +355,9 @@ class Card {
             .setTitle(this.Name)
             .setDescription(this.Description)
             .addFields(
-                { name: "Type", value: this.Type, inline: true },
+                { name: "category", value: this.category, inline: true },
                 { name: "Damage", value: `${this.Damage}`, inline: true },
-                { name: "Special Type", value: this.SpecialType, inline: true },
+                { name: "Special category", value: this.Specialcategory, inline: true },
                 { name: "Power", value: `${this.Power}`, inline: true },
                 { name: "Rarity", value: this.getRarity(), inline: true },
                 { name: "Move Set", value: this.MoveSet.join(", "), inline: false }

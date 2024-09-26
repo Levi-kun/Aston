@@ -61,6 +61,7 @@ module.exports = {
                   AND challenger_id = ? 
                   AND challenged_id = ? 
                   AND status = 'pending'
+                  LIMIT 1
             `;
             const existingChallengeRow = await dbGetAsync(pendingQuery, [guildId, challenger.id, challenged.id]);
 
@@ -172,6 +173,9 @@ module.exports = {
         }
     },
 };
+
+
+
 
 /**
  * Initiates the card selection process for both players.
