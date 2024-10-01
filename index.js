@@ -6,7 +6,9 @@ const path = require("node:path");
 
 const bot = require("./client.js");
 
-const { token } = require("./config.json");
+require("dotenv").config();
+
+const token = process.env.TOKEN;
 
 const eventsPath = path.join(__dirname, "events");
 const eventFiles = fs
