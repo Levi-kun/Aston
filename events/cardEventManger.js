@@ -26,47 +26,29 @@ async function getAmountPerServer(guildId) {
     }
 }
 
+function scheduleJobsForGuild(guildId, numJobs) {
+    const scheduledJobs = Array.from({ length: numJobs }, () => schedule.scheduleJob(getRandomTime(), () => eventEmitter.emit("spawnInCard", guildId)));
+    serverSchedules.set(guildId, scheduledJobs);
+}
+
 async function scheduleRandomJobsForServer(guild) {
     const guildId = guild.id;
 
     const guildExists = await isGuildInTable(guildId);
 
-    if (!guildExists) {
-        return; // Exit the function if the guild is not in the table
-    }
+    if (!guildExists) return; // Exit the function if the guild is not in the table
+    
 
     try {
         const amountPerDay = await getAmountPerServer(guildId);
+        if (amountPerDay === 0) return;
 
-        if (amountPerDay === 0) {
-            return; // Exit if no jobs need to be scheduled
-        }
-
-        // Clear any existing schedules for the server
-        if (serverSchedules.has(guildId)) {
-            serverSchedules.get(guildId).forEach((job) => job.cancel());
-            serverSchedules.delete(guildId);
-        }
-
-        const scheduledTimes = [];
-
-        for (let i = 0; i < amountPerDay; i++) {
-            const randomTime = getRandomTime();
-            scheduledTimes.push(randomTime);
-
-            const job = schedule.scheduleJob(randomTime, () => {
-                eventEmitter.emit("spawnInCard", guild); // Trigger your event
-            });
-
-            if (!serverSchedules.has(guildId)) {
-                serverSchedules.set(guildId, []);
-            }
-
-            serverSchedules.get(guildId).push(job);
-        }
+        serverSchedules.get(guildId)?.forEach(job => job.cancel());
+        scheduleJobsForGuild(guild, amountPerDay);
     } catch (error) {
         console.error(`Failed to schedule jobs for guild ${guildId}:`, error);
     }
+
 }
 
 // Function to schedule daily reset at midnight
