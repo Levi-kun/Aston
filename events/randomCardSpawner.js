@@ -35,7 +35,7 @@ function rarityDesignater(rarity) {
 
 async function addToPlayer(user, card, moveId, guild) {
     const query = `INSERT INTO "${guild.id}_owned_Cards" (vr, rank, card_id, player_id, realPower, move_ids) VALUES (?, ?, ?, ?, ?, ?)`;
-    
+
     let power;
     if (card.Value >= 4) {
         power = Math.floor(card.Value * getRandomMultiplier(0.9, 1.111));
@@ -54,7 +54,9 @@ async function addToPlayer(user, card, moveId, guild) {
         ]);
         return rowData;
     } catch (err) {
-        console.error(`Error inserting into ${guild.id}_owned_Cards: ${err.message}`);
+        console.error(
+            `Error inserting into ${guild.id}_owned_Cards: ${err.message}`
+        );
         throw err; // Re-throw the error after logging
     }
 }
@@ -64,29 +66,24 @@ function getRandomMultiplier(min, max) {
     return min + Math.random() * (max - min);
 }
 
-
 async function grabCardMoves(id) {
-        const query = `SELECT * FROM animeCardMoves WHERE cardId = ?`;
-        let rows = await dbAllAsync(query, [id]);
-    
-        if (!rows || rows.length === 0) {
-            rows = await dbAllAsync(query, [0]);
-        }
-        
-        // Ensure rows is always an array
-        if (!Array.isArray(rows)) {
-            rows = [rows];
-        }
-    
-        // Extract the 'id' from each row
-        const rowIds = rows.map(row => String(row.cardId));
+    const query = `SELECT * FROM animeCardMoves WHERE cardId = ?`;
+    let rows = await dbAllAsync(query, [id]);
 
-        return rowIds.join(',');
+    if (!rows || rows.length === 0) {
+        rows = await dbAllAsync(query, [0]);
+    }
+
+    // Ensure rows is always an array
+    if (!Array.isArray(rows)) {
+        rows = [rows];
+    }
+
+    // Extract the 'id' from each row
+    const rowIds = rows.map((row) => String(row.cardId));
+
+    return rowIds.join(",");
 }
-    
-    
-
-
 
 async function messageCreater(image, card, defaultChannel, link, guild) {
     const claimButton = new ButtonBuilder()
@@ -131,19 +128,25 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
         components: [row],
     });
 
-    const collectorFilter = (i) => i.customId === "next" || i.customId === "Claim";
+    const collectorFilter = (i) =>
+        i.customId === "next" || i.customId === "Claim";
 
     const collector = message.createMessageComponentCollector({
         filter: collectorFilter,
         time: 600_000,
     });
-    
-    collector.on('collect', async (i) => {
+
+    collector.on("collect", async (i) => {
         if (i.customId === "Claim") {
             await message.delete();
-    
+
             try {
-                await addToPlayer(i.user, card, await grabCardMoves(card.id), guild);
+                await addToPlayer(
+                    i.user,
+                    card,
+                    await grabCardMoves(card.id),
+                    guild
+                );
                 await message.channel.send(
                     `${i.user.username}, congrats on obtaining: ${card.Name}`
                 );
@@ -155,13 +158,11 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
             }
         }
     });
-    
-    
-    collector.on('end', (collected) => {
-        message.delete()
+
+    collector.on("end", (collected) => {
+        message.delete();
         console.log(`Collected ${collected.size} interactions.`);
     });
-    
 }
 
 module.exports = {
@@ -226,14 +227,20 @@ module.exports = {
             // Send messages to the default channel
             const defaultChannel = guild.channels.cache.get(defaultChannelId);
             if (defaultChannel) {
-                await messageCreater(image[0], card, defaultChannel, link[0], guild);
+                await messageCreater(
+                    image[0],
+                    card,
+                    defaultChannel,
+                    link[0],
+                    guild
+                );
             } else {
                 console.error("Default channel not found");
             }
         } catch (err) {
             console.error(`Error executing spawnInCard: ${err.message}`);
         }
-    }
+    },
 };
 
 // Listen for the 'spawnInCard' event

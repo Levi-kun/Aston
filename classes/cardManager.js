@@ -1,4 +1,11 @@
-const { Collection, Guild, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const {
+    Collection,
+    Guild,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+} = require("discord.js");
 const sqlite3 = require("sqlite3");
 const util = require("util");
 const bot = require("../client.js");
@@ -13,20 +20,20 @@ const dbGetAsync = util.promisify(animedb.get.bind(animedb));
 const dbRunAsync = util.promisify(animedb.run.bind(animedb));
 
 const BattleStatus = Object.freeze({
-    PENDING: 'pending',
-    DENIED: 'denied',
-    ON_GOING: 'on_going',
-    FINISHED: 'finished'
+    PENDING: "pending",
+    DENIED: "denied",
+    ON_GOING: "on_going",
+    FINISHED: "finished",
 });
 
-const moveTypes = Object.freeze({ 
+const moveTypes = Object.freeze({
     DMG: "DMG",
     SPECIAL: "SPECIAL",
     BUFF: "BUFF",
-    DEBUFF:"DEBUFF",
-    PASSIVE:"PASSIVE",
-    FOCUS:"FOCUS"
-}) 
+    DEBUFF: "DEBUFF",
+    PASSIVE: "PASSIVE",
+    FOCUS: "FOCUS",
+});
 
 class Battle {
     constructor(battleData) {
@@ -47,7 +54,7 @@ class Battle {
         this.challengedCards = JSON.parse(battleData.challenged_cards || "[]");
 
         this.battleMessages = {}; // Tracks message IDs
-        this.lastMove = ''; // Stores the description of the last move
+        this.lastMove = ""; // Stores the description of the last move
     }
 
     // Static methods...
@@ -63,13 +70,17 @@ class Battle {
                 ORDER BY created_at DESC
                 LIMIT 1
             `;
-            const result = await dbGetAsync(query, [guildId, playerId, playerId]);
+            const result = await dbGetAsync(query, [
+                guildId,
+                playerId,
+                playerId,
+            ]);
 
             if (result) {
                 return new Battle(result);
             }
 
-            return null; 
+            return null;
         } catch (e) {
             console.error(`Error fetching ongoing battle: ${e.message}`);
             return null;
@@ -82,7 +93,11 @@ class Battle {
                 INSERT INTO pvpBattles (guild_id, challenger_id, challenged_id, status, created_at)
                 VALUES (?, ?, ?, 'pending', datetime('now'))
             `;
-            await dbRunAsync(insertBattleQuery, [guildId, challengerId, challengedId]);
+            await dbRunAsync(insertBattleQuery, [
+                guildId,
+                challengerId,
+                challengedId,
+            ]);
 
             // Retrieve the newly created battle data
             const selectQuery = `
@@ -91,9 +106,14 @@ class Battle {
                 WHERE guild_id = ? AND challenger_id = ? AND challenged_id = ? 
                 ORDER BY created_at DESC LIMIT 1
             `;
-            const battleData = await dbGetAsync(selectQuery, [guildId, challengerId, challengedId]);
+            const battleData = await dbGetAsync(selectQuery, [
+                guildId,
+                challengerId,
+                challengedId,
+            ]);
 
-            if (!battleData) throw new Error('Failed to retrieve the created battle.');
+            if (!battleData)
+                throw new Error("Failed to retrieve the created battle.");
 
             // Return a new Battle instance using the retrieved battleData
             return new Battle(battleData);
@@ -103,26 +123,31 @@ class Battle {
         }
     }
 
-
     /**
      * This method handles forfeiting a battle.
      * It updates the battle status to 'finished', sets the winner and loser, and logs the finish time.
-     * 
+     *
      * @param {string} user_id - The ID of the user who is forfeiting.
      * @returns {object} - Contains battleData, winner_id, and loser_id.
      */
-    async forfeit(user_id){
+    async forfeit(user_id) {
         try {
             // Ensure the battle is ongoing and the user is part of it
             if (this.status !== BattleStatus.ON_GOING) {
-                throw new Error('Battle is not ongoing.');
+                throw new Error("Battle is not ongoing.");
             }
-            if (this.challengerId !== user_id && this.challengedId !== user_id) {
-                throw new Error('User is not part of this battle.');
+            if (
+                this.challengerId !== user_id &&
+                this.challengedId !== user_id
+            ) {
+                throw new Error("User is not part of this battle.");
             }
 
             // Determine the winner and loser
-            let winner_id = (this.challengerId === user_id) ? this.challengedId : this.challengerId;
+            let winner_id =
+                this.challengerId === user_id
+                    ? this.challengedId
+                    : this.challengerId;
             let loser_id = user_id;
 
             // Update the battle in the database
@@ -131,7 +156,12 @@ class Battle {
                 SET status = ?, winner_id = ?, loser_id = ?, finished_at = datetime('now')
                 WHERE battle_id = ?
             `;
-            await dbRunAsync(forfeitQuery, [BattleStatus.FINISHED, winner_id, loser_id, this.battleId]);
+            await dbRunAsync(forfeitQuery, [
+                BattleStatus.FINISHED,
+                winner_id,
+                loser_id,
+                this.battleId,
+            ]);
 
             // Update instance properties
             this.status = BattleStatus.FINISHED;
@@ -151,7 +181,6 @@ class Battle {
         }
     }
 
-
     /** Helper to get a player by ID */
     async getPlayerFromId(id) {
         try {
@@ -167,7 +196,9 @@ class Battle {
     /** Fetch guild from cache or Discord API */
     async getGuild() {
         try {
-            const guild = bot.guilds.cache.get(this.guildId) || await bot.guilds.fetch(this.guildId);
+            const guild =
+                bot.guilds.cache.get(this.guildId) ||
+                (await bot.guilds.fetch(this.guildId));
             if (!guild) {
                 console.error(`Guild with ID ${this.guildId} not found`);
                 return null;
@@ -190,7 +221,7 @@ class Battle {
                 query = `UPDATE pvpBattles SET current_turn = ?, status = ? WHERE battle_id = ?`;
                 params = [newTurn, this.status, this.battleId]; // Adjust as needed
             }
-        
+
             await dbRunAsync(query, params);
             this.currentTurn = newTurn;
             if (incrementStatus) {
@@ -208,7 +239,7 @@ class Battle {
     /**
      * Starts the battle by setting the status to 'on_going' and initializing the turn.
      */
-    async startBattle () {
+    async startBattle() {
         try {
             this.status = BattleStatus.ON_GOING;
             await this.updateStatus(this.status);
@@ -228,39 +259,31 @@ class Battle {
             throw error;
         }
     }
-    async updateTurn (newTurn=1) {
-        if(newTurn) {
+    async updateTurn(newTurn = 1) {
+        if (newTurn) {
             try {
-            const query = `
+                const query = `
                 UPDATE pvpBattles
                 SET current_turn = ?
                 WHERE battle_id = ?
             `;
-            await dbRunAsync(query, [newTurn, this.battleId]);
-            this.currentTurn = newTurn
-
-            } catch (e){
-                console.error(`${e}`)
+                await dbRunAsync(query, [newTurn, this.battleId]);
+                this.currentTurn = newTurn;
+            } catch (e) {
+                console.error(`${e}`);
             }
-
         } else if (newturn === 1) {
-            
             const query = `
             UPDATE pvpBattles
             SET current_turn = current_turn + 1
             WHERE battle_id = ?
         `;
-        await dbRunAsync(query, [this.battleId]);
-        this.currentTurn = newTurn
-
+            await dbRunAsync(query, [this.battleId]);
+            this.currentTurn = newTurn;
         }
-
     }
 
-    
-
     async updateStatus(newStatus) {
-
         try {
             const query = `
                 UPDATE pvpBattles
@@ -268,86 +291,106 @@ class Battle {
                 WHERE battle_id = ?
             `;
             await dbRunAsync(query, [newStatus, this.battleId]);
-    
+
             // Update the instance's status as well
             this.status = newStatus;
         } catch (error) {
             console.error(`Error updating battle status: ${error.message}`);
             throw error;
-        } 
+        }
     }
     /**
      * Determines who goes first and allows the selected player to decide their turn order.
      */
     async chooseFirstPlayer() {
         try {
-            const firstPlayer = Math.random() < 0.5 ? this.challengerId : this.challengedId;
+            const firstPlayer =
+                Math.random() < 0.5 ? this.challengerId : this.challengedId;
             const player = await this.getPlayerFromId(firstPlayer);
             if (!player) {
-                throw new Error('First player not found.');
+                throw new Error("First player not found.");
             }
 
-           
-            const channel = firstPlayer === this.challengerId ? await this.getBattleChannel() : player
-            
+            const channel =
+                firstPlayer === this.challengerId
+                    ? await this.getBattleChannel()
+                    : player;
+
             if (!channel) {
-                throw new Error('Battle channel not found.');
+                throw new Error("Battle channel not found.");
             }
 
             // Create buttons for the player to choose turn order
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`choose_first_${this.battleId}_1`) // 1 for first
-                        .setLabel(`Go First`)
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId(`choose_first_${this.battleId}_2`) // 2 for second
-                        .setLabel(`Go Second`)
-                        .setStyle(ButtonStyle.Primary)
-                );
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`choose_first_${this.battleId}_1`) // 1 for first
+                    .setLabel(`Go First`)
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`choose_first_${this.battleId}_2`) // 2 for second
+                    .setLabel(`Go Second`)
+                    .setStyle(ButtonStyle.Primary)
+            );
 
             const embed = new EmbedBuilder()
                 .setTitle("Choose Turn Order")
-                .setDescription(`${player.user.username}, would you like to go **first** or **second**?`)
+                .setDescription(
+                    `${player.user.username}, would you like to go **first** or **second**?`
+                )
                 .setColor("#3498DB");
 
-            const message = await channel.send({ embeds: [embed], components: [row] });
+            const message = await channel.send({
+                embeds: [embed],
+                components: [row],
+            });
             this.battleMessages.turnOrderMessage = message.id;
 
             // Listen for button interactions
-            const filter = interaction => {
-                return interaction.isButton() && interaction.customId.startsWith(`choose_first_${this.battleId}_`) && interaction.user.id === player.id;
+            const filter = (interaction) => {
+                return (
+                    interaction.isButton() &&
+                    interaction.customId.startsWith(
+                        `choose_first_${this.battleId}_`
+                    ) &&
+                    interaction.user.id === player.id
+                );
             };
 
-            const collector = channel.createMessageComponentCollector({ filter, time: 30000 });
+            const collector = channel.createMessageComponentCollector({
+                filter,
+                time: 30000,
+            });
 
-            collector.on('collect', async interaction => {
-                const choice = interaction.customId.split(`choose_first_${this.battleId}_`)[1];
-                if (choice === '1') {
+            collector.on("collect", async (interaction) => {
+                const choice = interaction.customId.split(
+                    `choose_first_${this.battleId}_`
+                )[1];
+                if (choice === "1") {
                     this.currentTurn = player.id; // Player chooses to go first
-                } else if (choice === '2') {
+                } else if (choice === "2") {
                     // Set turn to the other player
-                    this.currentTurn = (player.id === this.challengerId) ? this.challengedId : this.challengerId;
+                    this.currentTurn =
+                        player.id === this.challengerId
+                            ? this.challengedId
+                            : this.challengerId;
                 }
 
                 // Update the battle in the database
                 await this.updateTurnAndStatus(this.currentTurn, false);
 
                 // Disable buttons after choice
-                const disabledRow = new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`choose_first_${this.battleId}_1`)
-                            .setLabel(`Go First`)
-                            .setStyle(ButtonStyle.Success)
-                            .setDisabled(true),
-                        new ButtonBuilder()
-                            .setCustomId(`choose_first_${this.battleId}_2`)
-                            .setLabel(`Go Second`)
-                            .setStyle(ButtonStyle.Primary)
-                            .setDisabled(true)
-                    );
+                const disabledRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`choose_first_${this.battleId}_1`)
+                        .setLabel(`Go First`)
+                        .setStyle(ButtonStyle.Success)
+                        .setDisabled(true),
+                    new ButtonBuilder()
+                        .setCustomId(`choose_first_${this.battleId}_2`)
+                        .setLabel(`Go Second`)
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(true)
+                );
 
                 await interaction.update({ components: [disabledRow] });
                 collector.stop();
@@ -356,12 +399,14 @@ class Battle {
                 await message.delete();
             });
 
-            collector.on('end', collected => {
+            collector.on("end", (collected) => {
                 if (collected.size === 0) {
                     // If no response, default to firstPlayer going first
                     this.currentTurn = firstPlayer;
                     this.updateTurnAndStatus(this.currentTurn, false);
-                    channel.send(`${player.user.username} did not choose turn order. ${player.user.username} will go first by default.`);
+                    channel.send(
+                        `${player.user.username} did not choose turn order. ${player.user.username} will go first by default.`
+                    );
                 }
             });
         } catch (error) {
@@ -387,8 +432,14 @@ class Battle {
     /** Initializes battle and selects who goes first */
     async initializeBattle(challengerCards, challengedCards) {
         try {
-            this.challengerCards = await Card.getCardsByIds(challengerCards, this.guildId);
-            this.challengedCards = await Card.getCardsByIds(challengedCards, this.guildId);
+            this.challengerCards = await Card.getCardsByIds(
+                challengerCards,
+                this.guildId
+            );
+            this.challengedCards = await Card.getCardsByIds(
+                challengedCards,
+                this.guildId
+            );
 
             this.activeChallengerCard = this.challengerCards[0];
             this.activeChallengedCard = this.challengedCards[0];
@@ -412,7 +463,7 @@ class Battle {
             const currentPlayer = this.currentTurn;
             const player = await this.getPlayerFromId(currentPlayer);
             if (!player) {
-                throw new Error('Current player not found.');
+                throw new Error("Current player not found.");
             }
 
             const row = this.createControlButtons();
@@ -437,37 +488,42 @@ class Battle {
     async handleMove(playerId, moveId) {
         try {
             const isChallenger = playerId === this.challengerId;
-            const activeCard = isChallenger ? this.activeChallengerCard : this.activeChallengedCard;
-            const move = activeCard.MoveSet.find(m => m.moveId === moveId);
+            const activeCard = isChallenger
+                ? this.activeChallengerCard
+                : this.activeChallengedCard;
+            const move = activeCard.MoveSet.find((m) => m.moveId === moveId);
 
             if (!move) {
-                throw new Error('Invalid move.');
+                throw new Error("Invalid move.");
             }
 
             // Calculate damage or apply effects based on move type
             let real_dmg = 0;
             switch (move.moveType) {
-                case 'DMG':
+                case "DMG":
                     real_dmg = move.calculateDamage(activeCard.Power);
-                    await this.applyDamage(isChallenger ? this.challengedId : this.challengerId, real_dmg);
+                    await this.applyDamage(
+                        isChallenger ? this.challengedId : this.challengerId,
+                        real_dmg
+                    );
                     break;
-                case 'BUFF':
+                case "BUFF":
                     // Implement buff logic
                     break;
-                case 'DEBUFF':
+                case "DEBUFF":
                     // Implement debuff logic
                     break;
-                case 'SPECIAL':
+                case "SPECIAL":
                     // Implement special move logic
                     break;
-                case 'FOCUS':
+                case "FOCUS":
                     // Implement focus logic
                     break;
-                case 'PASSIVE':
+                case "PASSIVE":
                     // Passive moves are always active; no action needed
                     break;
                 default:
-                    throw new Error('Unknown move type.');
+                    throw new Error("Unknown move type.");
             }
 
             this.lastMove = `${activeCard.Name} uses ${move.moveName}`;
@@ -477,7 +533,9 @@ class Battle {
             await this.logMove(playerId, move, real_dmg);
 
             // Switch turn to the other player
-            this.currentTurn = isChallenger ? this.challengedId : this.challengerId;
+            this.currentTurn = isChallenger
+                ? this.challengedId
+                : this.challengerId;
             await this.updateTurnAndStatus(this.currentTurn, false);
 
             await this.sendFieldUpdate();
@@ -489,7 +547,6 @@ class Battle {
             } else {
                 await this.startBattleLoop();
             }
-
         } catch (error) {
             console.error(`Error handling move: ${error.message}`);
             throw error;
@@ -498,7 +555,7 @@ class Battle {
 
     /**
      * Applies damage to the target player by reducing their active card's power.
-     * 
+     *
      * @param {string} targetId - The ID of the player being attacked.
      * @param {number} damage - The amount of damage to apply.
      */
@@ -506,10 +563,12 @@ class Battle {
         try {
             if (targetId === this.challengerId) {
                 this.activeChallengerCard.realPower -= damage;
-                if (this.activeChallengerCard.realPower < 0) this.activeChallengerCard.realPower = 0;
+                if (this.activeChallengerCard.realPower < 0)
+                    this.activeChallengerCard.realPower = 0;
             } else {
                 this.activeChallengedCard.realPower -= damage;
-                if (this.activeChallengedCard.realPower < 0) this.activeChallengedCard.realPower = 0;
+                if (this.activeChallengedCard.realPower < 0)
+                    this.activeChallengedCard.realPower = 0;
             }
         } catch (error) {
             console.error(`Error applying damage: ${error.message}`);
@@ -519,7 +578,7 @@ class Battle {
 
     /**
      * Logs a move into the pvpMoves table.
-     * 
+     *
      * @param {string} playerId - The ID of the player making the move.
      * @param {Move} move - The move being made.
      * @param {number} real_dmg - The calculated damage from the move.
@@ -530,7 +589,10 @@ class Battle {
                 INSERT INTO pvpMoves (battle_id, move_id, player_id, move_type, special_dmg, target_card_id, value, move_at, target_value, target_effect, modifiers, real_dmg)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
-            const targetCardId = playerId === this.challengerId ? this.challengedId : this.challengerId;
+            const targetCardId =
+                playerId === this.challengerId
+                    ? this.challengedId
+                    : this.challengerId;
             await dbRunAsync(insertMoveQuery, [
                 this.battleId,
                 move.moveId,
@@ -540,10 +602,12 @@ class Battle {
                 targetCardId,
                 move.calculateDamage(this.activeChallengerCard.Power), // Example value
                 this.turnCount,
-                playerId === this.challengerId ? this.activeChallengedCard.realPower : this.activeChallengerCard.realPower,
-                move.target_effect || '',
+                playerId === this.challengerId
+                    ? this.activeChallengedCard.realPower
+                    : this.activeChallengerCard.realPower,
+                move.target_effect || "",
                 JSON.stringify(move.modifiers || {}),
-                real_dmg
+                real_dmg,
             ]);
         } catch (error) {
             console.error(`Error logging move: ${error.message}`);
@@ -558,7 +622,9 @@ class Battle {
             const channel = await this.getBattleChannel();
 
             if (this.battleMessages.fieldMessage) {
-                const message = await channel.messages.fetch(this.battleMessages.fieldMessage);
+                const message = await channel.messages.fetch(
+                    this.battleMessages.fieldMessage
+                );
                 await message.edit({ embeds: [embed] });
             } else {
                 const message = await channel.send({ embeds: [embed] });
@@ -576,9 +642,9 @@ class Battle {
             .setTitle("Battlefield")
             .setDescription(
                 `**Challenger's Card:** ${this.activeChallengerCard.Name} | Power: ${this.activeChallengerCard.realPower}\n` +
-                `**Challenged's Card:** ${this.activeChallengedCard.Name} | Power: ${this.activeChallengedCard.realPower}\n` +
-                `**Last Move:** ${this.lastMove || 'None'}\n` +
-                `**Turn Count:** ${this.turnCount}`
+                    `**Challenged's Card:** ${this.activeChallengedCard.Name} | Power: ${this.activeChallengedCard.realPower}\n` +
+                    `**Last Move:** ${this.lastMove || "None"}\n` +
+                    `**Turn Count:** ${this.turnCount}`
             )
             .setColor("#2ECC71");
     }
@@ -607,7 +673,9 @@ class Battle {
                     const message = await channel.messages.fetch(msgId);
                     if (message) await message.delete();
                 } catch (err) {
-                    console.error(`Error deleting message ${msgId}: ${err.message}`);
+                    console.error(
+                        `Error deleting message ${msgId}: ${err.message}`
+                    );
                 }
             }
 
@@ -621,18 +689,26 @@ class Battle {
 
     /**
      * Updates the battle conclusion details in the database.
-     * 
+     *
      * @param {string} winnerId - The ID of the winner.
      */
     async updateBattleConclusion(winnerId) {
         try {
-            const loserId = winnerId === this.challengerId ? this.challengedId : this.challengerId;
+            const loserId =
+                winnerId === this.challengerId
+                    ? this.challengedId
+                    : this.challengerId;
             const query = `
                 UPDATE pvpBattles 
                 SET status = ?, winner_id = ?, loser_id = ?, finished_at = datetime('now') 
                 WHERE battle_id = ?
             `;
-            await dbRunAsync(query, [BattleStatus.FINISHED, winnerId, loserId, this.battleId]);
+            await dbRunAsync(query, [
+                BattleStatus.FINISHED,
+                winnerId,
+                loserId,
+                this.battleId,
+            ]);
             this.status = BattleStatus.FINISHED;
             this.winner_id = winnerId;
             this.loser_id = loserId;
@@ -645,7 +721,10 @@ class Battle {
 
     /** Reward users for win/loss */
     async rewardPlayers(winnerId) {
-        const loserId = winnerId === this.challengerId ? this.challengedId : this.challengerId;
+        const loserId =
+            winnerId === this.challengerId
+                ? this.challengedId
+                : this.challengerId;
 
         await this.rewardUser(winnerId, 1); // 1 for win
         await this.rewardUser(loserId, -1); // -1 for loss
@@ -668,9 +747,11 @@ class Battle {
         try {
             const guild = await this.getGuild();
             if (!guild) return null;
-            const channel = guild.channels.cache.find(channel => channel.name === 'battle-channel');
+            const channel = guild.channels.cache.find(
+                (channel) => channel.name === "battle-channel"
+            );
             if (!channel) {
-                console.error('Battle channel not found.');
+                console.error("Battle channel not found.");
             }
             return channel;
         } catch (error) {
@@ -723,14 +804,14 @@ class Card {
 
     /**
      * Static method to fetch multiple cards by their IDs.
-     * @param {Array<number>} cardIds 
-     * @param {string} guildId 
+     * @param {Array<number>} cardIds
+     * @param {string} guildId
      * @returns {Promise<Array<Card>>}
      */
     static async getCardsByIds(cardIds, guildId) {
         if (!cardIds.length) return [];
 
-        const placeholders = cardIds.map(() => '?').join(',');
+        const placeholders = cardIds.map(() => "?").join(",");
 
         const query = `
             SELECT oc.card_id as id, acl.Name, acl.Categories, acl.Value, acl.category, 
@@ -744,11 +825,13 @@ class Card {
         const rows = await dbAllAsync(query, cardIds);
 
         // Fetch move sets for each card
-        const cards = await Promise.all(rows.map(async row => {
-            const moveSet = await this.getMovesForCard(row.move_ids);
-            return new Card(row, moveSet);
-        }));
-        
+        const cards = await Promise.all(
+            rows.map(async (row) => {
+                const moveSet = await this.getMovesForCard(row.move_ids);
+                return new Card(row, moveSet);
+            })
+        );
+
         return cards;
     }
 
@@ -759,9 +842,9 @@ class Card {
      */
     static async getMovesForCard(move_ids) {
         if (!move_ids) return [];
-        
-        const moveIdArray = move_ids.split(',').map(id => id.trim());
-        const placeholders = moveIdArray.map(() => '?').join(',');
+
+        const moveIdArray = move_ids.split(",").map((id) => id.trim());
+        const placeholders = moveIdArray.map(() => "?").join(",");
         const query = `
             SELECT * FROM animeCardMoves
             WHERE moveId IN (${placeholders})
@@ -769,14 +852,14 @@ class Card {
         const rows = await dbAllAsync(query, moveIdArray);
 
         // Assuming a Move class exists to instantiate each move row
-        const moves = rows.map(row => new Move(row));
+        const moves = rows.map((row) => new Move(row));
         return moves;
     }
 
     /**
      * Static method to fetch a user's owned cards.
-     * @param {string} userId 
-     * @param {string} guildId 
+     * @param {string} userId
+     * @param {string} guildId
      * @returns {Promise<Array<Card>>}
      */
     static async getUserCards(userId, guildId) {
@@ -791,11 +874,13 @@ class Card {
         const rows = await dbAllAsync(query, [userId, guildId]);
 
         // Fetch move sets for each card
-        const cards = await Promise.all(rows.map(async row => {
-            const moveSet = await this.getMovesForCard(row.move_ids);
-            return new Card(row, moveSet);
-        }));
-        
+        const cards = await Promise.all(
+            rows.map(async (row) => {
+                const moveSet = await this.getMovesForCard(row.move_ids);
+                return new Card(row, moveSet);
+            })
+        );
+
         return cards;
     }
 
@@ -813,7 +898,7 @@ class Card {
 **Other Modifier:** ${this.OtherModifier}
 **Power:** ${this.Power}
 **Rank:** ${this.Rank}
-**Move Set:** ${this.MoveSet.map(move => move.moveName).join(", ")}
+**Move Set:** ${this.MoveSet.map((move) => move.moveName).join(", ")}
         `;
     }
 
@@ -828,10 +913,18 @@ class Card {
             .addFields(
                 { name: "Category", value: this.category, inline: true },
                 { name: "Damage", value: `${this.Damage}`, inline: true },
-                { name: "Special Category", value: this.Specialcategory, inline: true },
+                {
+                    name: "Special Category",
+                    value: this.Specialcategory,
+                    inline: true,
+                },
                 { name: "Power", value: `${this.Power}`, inline: true },
                 { name: "Rarity", value: this.getRarity(), inline: true },
-                { name: "Move Set", value: this.MoveSet.map(move => move.moveName).join(", "), inline: false }
+                {
+                    name: "Move Set",
+                    value: this.MoveSet.map((move) => move.moveName).join(", "),
+                    inline: false,
+                }
             )
             .setColor("#FF0000"); // Example color
     }
@@ -891,7 +984,11 @@ class Move {
      * @returns {number} - The effective damage.
      */
     calculateDamage(cardPower) {
-        return (this.baseDMG + this.specialDMG) * (cardPower / 100) * this.ownModifier;
+        return (
+            (this.baseDMG + this.specialDMG) *
+            (cardPower / 100) *
+            this.ownModifier
+        );
     }
 }
 
@@ -899,5 +996,5 @@ module.exports = {
     BattleStatus,
     Card,
     Battle,
-    Move
+    Move,
 };

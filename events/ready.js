@@ -2,11 +2,34 @@ const { Events, ActivityType } = require("discord.js");
 const clientF = require("../client.js");
 const fs = require("fs");
 const path = require("path");
+const { collectSchemasAndCreateDB } = require(`../src/createCollections.js`);
 
 module.exports = {
     name: Events.ClientReady,
     once: true,
     execute(client) {
+        /*
+
+        *
+
+       DataBases
+
+        *
+
+        */
+
+        collectSchemasAndCreateDB(`../databases`);
+
+        /*
+
+        *
+
+       Commands
+
+        *
+
+        */
+
         commands = clientF.commands;
 
         client.user.setStatus("online");

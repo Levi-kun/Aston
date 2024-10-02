@@ -27,7 +27,11 @@ async function getAmountPerServer(guildId) {
 }
 
 function scheduleJobsForGuild(guildId, numJobs) {
-    const scheduledJobs = Array.from({ length: numJobs }, () => schedule.scheduleJob(getRandomTime(), () => eventEmitter.emit("spawnInCard", guildId)));
+    const scheduledJobs = Array.from({ length: numJobs }, () =>
+        schedule.scheduleJob(getRandomTime(), () =>
+            eventEmitter.emit("spawnInCard", guildId)
+        )
+    );
     serverSchedules.set(guildId, scheduledJobs);
 }
 
@@ -37,18 +41,16 @@ async function scheduleRandomJobsForServer(guild) {
     const guildExists = await isGuildInTable(guildId);
 
     if (!guildExists) return; // Exit the function if the guild is not in the table
-    
 
     try {
         const amountPerDay = await getAmountPerServer(guildId);
         if (amountPerDay === 0) return;
 
-        serverSchedules.get(guildId)?.forEach(job => job.cancel());
+        serverSchedules.get(guildId)?.forEach((job) => job.cancel());
         scheduleJobsForGuild(guild, amountPerDay);
     } catch (error) {
         console.error(`Failed to schedule jobs for guild ${guildId}:`, error);
     }
-
 }
 
 // Function to schedule daily reset at midnight
