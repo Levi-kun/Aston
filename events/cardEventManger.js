@@ -65,8 +65,12 @@ async function isGuildInTable(guildId) {
     const query = { id: guildId };
 
     try {
-        const result = guildQuery.readOne(query).toArray();
-        return result.length > 0; // Return true if guild exists, otherwise false
+        const result = guildQuery.readOne(query);
+        if (result) {
+            return true;
+        } else {
+            return false;
+        }
     } catch (error) {
         console.error(`Failed to check guild ${guildId} in the table:`, error);
         return false; // If an error occurs, treat as if the guild does not exist

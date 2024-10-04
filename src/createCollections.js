@@ -74,9 +74,7 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
     }
 }
 
-const folderPath = path.join(__dirname, "../databases"); // Set correct folder path
-
-collectSchemasAndCreateDB(folderPath)
+collectSchemasAndCreateDB("../databases")
     .then(() => console.log("Database Setup Complete"))
     .catch((err) => console.error("Error setting up database:", err));
 
