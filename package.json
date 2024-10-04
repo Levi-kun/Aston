@@ -4,6 +4,7 @@
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
     "mongodb": "^6.9.0",
+    "mpath": "^0.9.0",
     "node-schedule": "^2.1.1",
     "sequelize": "^6.37.3"
   },

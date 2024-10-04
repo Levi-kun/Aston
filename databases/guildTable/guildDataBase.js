@@ -2,7 +2,14 @@ const guildDataBasetSchema = {
     collectionName: "guildDataBase",
     schema: {
         bsonType: "object", // Specifies that the root type is an object
-        required: ["name", "amountofUsers", "gainADAY", "searchADAY"],
+        required: [
+            "name",
+            "id",
+            "amountofUsers",
+            "gainADAY",
+            "searchADAY",
+            "version",
+        ],
         additionalProperties: false, // Disallow any fields that are not explicitly defined}
         properties: {
             _id: {
