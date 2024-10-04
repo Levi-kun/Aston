@@ -1,5 +1,5 @@
 const animecategoryListSchema = {
-    collectionName: "animecategoryCategory",
+    collectionName: "animeCardCategories",
     schema: {
         bsonType: "object", // Specifies that the root type is an object
         required: [
@@ -63,4 +63,4 @@ const animecategoryListSchema = {
     },
 };
 
-module.exports = { animecategoryListSchema };
+module.exports = animecategoryListSchema;

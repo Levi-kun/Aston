@@ -1,62 +1,26 @@
 const { Events } = require("discord.js");
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db");
-const util = require("util");
-const dbRunAsync = util.promisify(db.run.bind(db));
-const config = require('../config.json')
-const version = config.version
-
+const { Query } = require("../databases/query.js");
+const config = require("../config.json");
+const version = config.version;
 
 async function createOrInsertUser(guildId, userId, userName) {
-    try {
-        // Check if the table exists
-        const tableExists = await dbRunAsync(
-            `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-            [`${guildId}_users`]
-        );
+    const userQuery = new Query("userDataBase");
 
-        if (!tableExists) {
-            // Create the table
-            await dbRunAsync(`
-          CREATE TABLE IF NOT EXISTS \`${guildId}_users\` (
-            user_id INTEGER PRIMARY KEY UNIQUE,
-            name TEXT,
-            cards TEXT,
-            currentClaims INTEGER,
-            lastClaimDate TEXT,
-            wins INTEGER,
-            losses INTEGER,
-            value INTEGER,
-            cardAmount INTEGER,
-            pro BOOLEAN
-          );
-        `);
-        }
+    // Check if the user exists
+    const checkQuery = { _id: userId, _guildId: guildId };
+    const existingUser = await userQuery.readOne(checkQuery);
 
-        // Check if the user exists
-        const existingUser = await dbRunAsync(
-            `SELECT * FROM \`${guildId}_users\` WHERE user_id = ?`,
-            [userId]
-        );
-
-        if (existingUser) {
-            console.log(`User ID ${userId} already exists in the database.`);
-        } else {
-            // Insert the user
-            await dbRunAsync(
-                `
-          INSERT INTO \`${guildId}_users\`
-          (user_id, name, cards, currentClaims, lastClaimDate, wins, losses, value, cardAmount, pro)
-          VALUES (?, ?, ' ', 0, ' ', 0, 0, 0, 0, 0)
-        `,
-                [userId, userName]
-            );
-            console.log(`User ${userName} (${userId}) added to the database.`);
-        }
-    } catch (error) {
-        if (tableCreated === "false") {
-            console.error("Error:", error.message);
-        }
+    if (existingUser) {
+        console.log(`User ID ${userId} already exists in the database.`);
+    } else {
+        // Insert the user
+        const creationQuery = {
+            _id: userId,
+            _guildId: guildId,
+            name: userName,
+        };
+        await userQuery.insertOne(creationQuery);
+        console.log(`User ${userName} (${userId}) added to the database.`);
     }
 }
 
@@ -68,27 +32,20 @@ module.exports = {
             const guild = member.guild;
             const guildId = guild.id;
             const guildUserCount = guild.memberCount;
-            createOrInsertUser(
-                member.guild.id,
+            await createOrInsertUser(
+                guildId,
                 member.user.id,
                 member.user.username
             );
-            // Update the 'amountofUsers' field in the 'guildTable'
-            db.run(
-                `
-        UPDATE guildTable
-        SET amountofUsers = ?
-        WHERE guildID = ?
-        `,
-                [guildUserCount, guildId],
-                (err) => {
-                    if (err) {
-                        console.error("Error updating user count:", err);
-                    } else {
-                        console.log(`User joined guild: ${member.user.tag}`);
-                    }
-                }
+
+            // Update the 'amountofUsers' field in the 'guildTable' in MongoDB
+            const guildQuery = new Query("guildDataBase");
+            await guildQuery.updateOne(
+                { id: guildId },
+                { $set: { amountofUsers: guildUserCount } }
             );
+
+            console.log(`User joined guild: ${member.user.tag}`);
         } catch (error) {
             console.error("Error handling user join event:", error);
         }

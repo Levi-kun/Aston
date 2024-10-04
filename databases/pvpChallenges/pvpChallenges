@@ -38,3 +38,5 @@ const pvpChallengesSchema = {
         },
     },
 };
+
+module.exports = pvpChallengesSchema;

@@ -1,20 +1,23 @@
 const { MongoClient } = require("mongodb");
-const { guildDataBasetSchema } = require("./schema"); // Import your schema
-const fs = require("fs");
+const fs = require("fs").promises; // Use promises-based fs functions
 const mpath = require("mpath");
+const path = require("path");
 require("dotenv").config();
 
 class Query {
     constructor(collectionName) {
+        if (!collectionName) {
+            throw new Error("Collection name is required.");
+        }
         this.collectionName = collectionName;
         this.schema = this._collectionSchema(collectionName); // Use the passed schema for validation
-        this.client = new MongoClient(process.env.MONGODB_URI); // MongoDB connection URI
+        this.client = new MongoClient(process.env.MONGODB_URI);
         this.dbName = process.env.MONGODB_NAME; // Replace with your actual DB name
     }
 
     // Connect to the MongoDB
     async connect() {
-        if (!this.client.isConnected()) {
+        if (!this.client.isConnected && this.client.connect) {
             await this.client.connect();
         }
         this.db = this.client.db(this.dbName);
@@ -98,7 +101,10 @@ class Query {
         });
         return result;
     }
-
+    async aggergate(num) {
+        await this.connect();
+        return this.collection.aggergate([{ $sample: { size: num } }]);
+    }
     // Update all documents that match the filter
     async updateAll(filter, newData) {
         await this.connect();
@@ -116,39 +122,48 @@ class Query {
         return result;
     }
 
+    async readMany(query) {
+        await this.connect();
+        const result = await this.collection.findMany(query);
+        return result;
+    }
+
     async _collectionSchema(collectionName) {
-        const parentFolder = "./"; // Base path
-        const folderPath = path.join(parentFolder, collectionName); // Corrected typo: "path.jon" to "path.join"
-        const fileName = `${collectionName}.js`; // The expected schema file name
+        const parentFolder = "./databases"; // Adjust the base path as needed
+
+        if (!collectionName) {
+            throw new Error("Collection name is required.");
+        }
+
+        const folderPath = path.join(parentFolder, collectionName); // Assuming folder name matches collectionName
+        const fileName = `${collectionName}.js`; // File name should match collectionName
 
         try {
-            // Read the contents of the folder
-            const files = await fs.readdir(folderPath);
+            // Check if the folder exists
+            const folderExists = await fs.stat(folderPath);
+            if (folderExists.isDirectory()) {
+                const files = await fs.readdir(folderPath); // Read files in the child folder
 
-            // Check if the expected file exists in the folder
-            if (files.includes(fileName)) {
-                console.log(
-                    `Schema file '${fileName}' exists in '${folderPath}'.`
-                );
-                // Optionally, you can read the file here
-                const schema = await fs.readFile(
-                    path.join(folderPath, fileName),
-                    "utf8"
-                );
-                return schema; // Return the schema content
+                if (files.includes(fileName)) {
+                    console.log(
+                        `Schema file '${fileName}' exists in '${folderPath}'.`
+                    );
+                    const schema = require(path.join(folderPath, fileName));
+                    return schema.schema; // Return the schema object
+                } else {
+                    console.error(
+                        `Schema file '${fileName}' not found in '${folderPath}'.`
+                    );
+                    return null;
+                }
             } else {
-                console.error(
-                    `Schema file '${fileName}' not found in '${folderPath}'.`
-                );
-                return null; // Or handle it as needed
+                throw new Error(`'${folderPath}' is not a valid directory.`);
             }
         } catch (err) {
-            console.error(
-                `Error reading directory '${folderPath}': ${err.message}`
-            );
-            throw err; // Rethrow the error if you want to handle it higher up
+            console.error(`Error accessing '${folderPath}': ${err.message}`);
+            throw err;
         }
     }
 }
 
-module.exports = Query;
+module.exports = { Query };

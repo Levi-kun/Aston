@@ -70,3 +70,5 @@ const pvpMovesSchema = {
         },
     },
 };
+
+module.exports = pvpMovesSchema;

@@ -1,71 +1,57 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ownerId } = require("../../config.json"); // Replace with your actual ownerId
+const { ownerId } = require("../../config.json"); 
+const Query = require("../../databases/query.js");
 
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
-const util = require("util");
-const { link } = require("fs");
-const dbRunAsync = util.promisify(db.run.bind(db));
+const collectionName = "animeCardPhotos"; 
 
 module.exports = {
     category: "admin",
     data: new SlashCommandBuilder()
         .setName("editimage")
-        .setDMPermission(false)
         .setDescription(
             "Add, update, or remove an image from the anime card pictures database"
         )
-        .addIntegerOption(
-            (option) =>
-                option
-                    .setName("cardid")
-                    .setDescription(
-                        "Enter the ID of the card you want to associate the image with"
-                    )
-                    .setRequired(true) // Make this option required
+        .addIntegerOption((option) =>
+            option
+                .setName("cardid")
+                .setDescription(
+                    "Enter the ID of the card you want to associate the image with"
+                )
+                .setRequired(true)
         )
-        .addStringOption(
-            (option) =>
-                option
-                    .setName("imageurl")
-                    .setDescription(
-                        "Enter the URL of the image you want to add"
-                    )
-                    .setRequired(true) // Make this option optional
+        .addStringOption((option) =>
+            option
+                .setName("imageurl")
+                .setDescription("Enter the URL of the image you want to add")
+                .setRequired(true)
         )
-        .addStringOption(
-            (option) =>
-                option
-                    .setName("imagelink")
-                    .setDescription("Attach the link to image")
-                    .setRequired(true) // Make this option optional
+        .addStringOption((option) =>
+            option
+                .setName("imagelink")
+                .setDescription("Attach the link to image")
+                .setRequired(true)
         )
-        .addBooleanOption(
-            (option) =>
-                option
-                    .setName("update")
-                    .setDescription(
-                        "Set to true if you want to update an existing image, false otherwise"
-                    )
-                    .setRequired(false) // Make this option optional
+        .addBooleanOption((option) =>
+            option
+                .setName("update")
+                .setDescription(
+                    "Set to true if you want to update an existing image, false otherwise"
+                )
+                .setRequired(false)
         )
-        .addIntegerOption(
-            (option) =>
-                option
-                    .setName("imageid")
-                    .setDescription(
-                        "Enter the ID of the image you want to modify"
-                    )
-                    .setRequired(false) // Make this option optional
+        .addIntegerOption((option) =>
+            option
+                .setName("imageid")
+                .setDescription("Enter the ID of the image you want to modify")
+                .setRequired(false)
         )
-        .addBooleanOption(
-            (option) =>
-                option
-                    .setName("remove")
-                    .setDescription(
-                        "Set to true if you want to remove an existing image, false otherwise"
-                    )
-                    .setRequired(false) // Make this option optional
+        .addBooleanOption((option) =>
+            option
+                .setName("remove")
+                .setDescription(
+                    "Set to true if you want to remove an existing image, false otherwise"
+                )
+                .setRequired(false)
         ),
     async execute(interaction) {
         if (interaction.user.id !== ownerId) return;
@@ -77,6 +63,8 @@ module.exports = {
         let imageLink = interaction.options.getString("imagelink");
         const update = interaction.options.getBoolean("update") || false;
         const remove = interaction.options.getBoolean("remove") || false;
+
+        const query = new Query(collectionName); // Instantiate the Query class
 
         try {
             console.log(
@@ -91,13 +79,7 @@ module.exports = {
                     return;
                 }
                 // Remove the specific image by its ID
-                await dbRunAsync(
-                    `
-                    DELETE FROM animeCardPictures
-                    WHERE id = ?;
-                `,
-                    [imageId]
-                );
+                await query.removeOne({ _id: imageId });
                 await interaction.reply(
                     `Image with ID ${imageId} removed successfully!`
                 );
@@ -114,33 +96,28 @@ module.exports = {
             }
 
             if (update) {
-                if (!cardId) {
+                if (!imageId) {
                     await interaction.reply(
-                        "Please provide the card ID to update the image."
+                        "Please provide the image ID to update the image."
                     );
                     return;
                 }
                 // Update existing image for the specified card ID
-                await dbRunAsync(
-                    `
-                    UPDATE animeCardPictures
-                    SET pictureData = ?, link  = ?
-                    WHERE cardId = ?, id = ?;
-                `,
-                    [imageToInsert, imageLink, cardId, imageId]
+                await query.updateOne(
+                    { cardId: cardId, _id: imageId },
+                    { pictureData: imageToInsert, link: imageLink }
                 );
                 await interaction.reply(
                     `Image updated for card ID ${cardId} successfully!`
                 );
             } else {
-                // Insert the image into the animeCardPictures table
-                await dbRunAsync(
-                    `
-                    INSERT INTO animeCardPictures (cardId, attachment, pictureData, link)
-                    VALUES (?, ?, ?, ?);
-                `,
-                    [cardId, 0, imageToInsert, imageLink]
-                );
+                // Insert the image into the animeCardPictures collection
+                await query.insertOne({
+                    cardId: cardId,
+                    attachment: 0,
+                    pictureData: imageToInsert,
+                    link: imageLink,
+                });
                 await interaction.reply(
                     `Image added to card ID ${cardId} successfully!`
                 );
@@ -151,6 +128,8 @@ module.exports = {
             await interaction.reply(
                 "An error occurred while adding, updating, or removing the image."
             );
+        } finally {
+            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };

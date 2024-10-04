@@ -1,46 +1,84 @@
-const { dataBaseInteract } = require(`../classes/db.js`);
-
+const { Query } = require("../databases/query.js"); // Import the Query class
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 
-const uri = process.env.MONGODB_URI;
-const fs = require(`fs`);
-const client = new dataBaseInteract(uri);
+async function collectSchemasAndCreateDB(baseFolderPath) {
+    try {
+        // Read all directories (each representing a collection schema) in the base folder path
+        const folders = fs
+            .readdirSync(baseFolderPath)
+            .filter((file) =>
+                fs.lstatSync(path.join(baseFolderPath, file)).isDirectory()
+            );
 
-async function collectSchemasAndCreateDB(folderpath) {
-    await client.connect();
+        // Iterate through each folder and find schema files inside
+        for (const folder of folders) {
+            const folderFullPath = path.join(baseFolderPath, folder); // Correct the folderPath usage
+            const files = fs.readdirSync(folderFullPath);
 
-    const folders = fs
-        .readdir(folderpath)
-        .filter((file) =>
-            fs.lstatSync(path.join(folderPath, file)).isDirectory()
-        );
+            // Iterate through files in the folder to find schema files
+            for (const file of files) {
+                const filePath = path.join(folderFullPath, file);
 
-    for (const folder of folders) {
-        const folderPath = path.join(folderpath, folder);
-        const files = fs.readdirSync(folderPath);
+                // If a file is a schema file (assuming .js schema files)
+                if (file.endsWith(".js")) {
+                    const schemaModule = require(filePath); // Require the schema
 
-        for (const file of files) {
-            const filepath = path.join(folderPath, file);
-            if (file.endsWith(".js")) {
-                const schema = require(filePath);
-                if (schema && schema.collectionName && schema.schema) {
-                    await client.create_collection(
-                        schema.collectionName,
-                        schema.schema
-                    );
+                    // Check if the schema module contains collectionName and schema fields
+                    if (
+                        schemaModule &&
+                        schemaModule.collectionName &&
+                        schemaModule.schema
+                    ) {
+                        const { collectionName, schema } = schemaModule;
+
+                        // Create a new Query instance with the collection name
+                        const query = new Query(collectionName);
+
+                        // Connect to MongoDB and create the collection if not exists
+                        await query.connect(); // Ensure the Query instance connects properly
+
+                        try {
+                            // Attempt to create the collection with the schema validation
+                            await query.db.createCollection(collectionName, {
+                                validator: { $jsonSchema: schema },
+                            });
+                            console.log(
+                                `Collection '${collectionName}' created/verified.`
+                            );
+                        } catch (err) {
+                            if (err.codeName === "NamespaceExists") {
+                                console.log(
+                                    `Collection '${collectionName}' already exists.`
+                                );
+                            } else {
+                                console.error(
+                                    `Error creating collection '${collectionName}':`,
+                                    err
+                                );
+                            }
+                        } finally {
+                            await query.client.close(); // Close connection after each operation
+                        }
+                    } else {
+                        console.error(
+                            `Schema file '${file}' does not contain valid collectionName or schema fields.`
+                        );
+                    }
                 }
             }
         }
+    } catch (err) {
+        console.error("Error setting up database:", err);
     }
-
-    await client.closeConnection();
 }
 
-const folderPath = "../databases";
+const folderPath = path.join(__dirname, "../databases"); // Set correct folder path
 
 collectSchemasAndCreateDB(folderPath)
-    .then(() => console.log(`Database Setup Complete`))
-    .catch((e) => console.log(`Error setting up database:`, err));
+    .then(() => console.log("Database Setup Complete"))
+    .catch((err) => console.error("Error setting up database:", err));
 
 module.exports = {
     collectSchemasAndCreateDB,

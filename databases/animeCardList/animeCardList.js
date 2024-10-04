@@ -48,4 +48,4 @@ const animeCardListSchema = {
     },
 };
 
-module.exports = { animeCardListSchema };
+module.exports = animeCardListSchema;

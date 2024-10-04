@@ -1,9 +1,8 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json");
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db");
-const util = require("util");
-const dbAllAsync = util.promisify(db.all.bind(db));
+const Query = require("../../databases/query.js"); // Path to your Query class
+
+const collectionName = "animeCardList"; // Replace with your actual collection name
 
 module.exports = {
     category: "admin",
@@ -23,61 +22,54 @@ module.exports = {
 
         // Get option value from the interaction
         const cardName = interaction.options.getString("cardname");
+        const query = new Query(collectionName); // Instantiate the Query class
 
         try {
             // Retrieve data for the specified card name
-            const query = `
-                SELECT *
-                FROM animeCardList
-                WHERE Name = ?
-            `;
-            const cardData = await dbAllAsync(query, [cardName]);
+            const cardData = await query.findOne({ name: cardName });
 
-            if (cardData.length === 0) {
+            if (!cardData) {
                 await interaction.reply(
                     `No data found for card "${cardName}".`
                 );
-            } else {
-                // Assuming you want to display the data in a formatted way
-                const formattedData = cardData.map((card) => {
-                    return `ID: ${card.id}, Name: ${card.Name}, Value: ${card.Value}, Categories: ${card.Categories}, Rarity: ${card.Rarity}`;
-                });
-
-                // Retrieve moves associated with the card
-                const moveQuery = `
-                    SELECT moveName, moveDescription, moveType, baseDMG
-                    FROM animeCardMoves
-                    WHERE cardId = ?
-                `;
-                const moves = await dbAllAsync(moveQuery, [cardData[0].id]);
-
-                const formattedMoves = moves.map((move) => {
-                    return `Move: ${move.moveName}, Description: ${move.moveDescription}, Type: ${move.moveType}, Base DMG: ${move.baseDMG}`;
-                });
-
-                // Retrieve associated photos
-                const photoQuery = `
-                    SELECT pictureData
-                    FROM animeCardPictures
-                    WHERE cardId = ?
-                `;
-                const photos = await dbAllAsync(photoQuery, [cardData[0].id]);
-
-                const photoUrls = photos.map((photo) => photo.pictureData);
-
-                await interaction.reply(
-                    `Data for card "${cardName}":\n${formattedData.join(
-                        "\n"
-                    )}\nMoves:\n${formattedMoves.join(
-                        "\n"
-                    )}\nPhotos:\n${photoUrls.join("\n")}`
-                );
+                return;
             }
+
+            // Assuming you want to display the data in a formatted way
+            const formattedData = `ID: ${cardData._id}, Name: ${
+                cardData.name
+            }, Power: ${cardData.power}, Categories: ${cardData.categories.join(
+                ", "
+            )}, Owned: ${cardData.owned}, Rarity: ${
+                cardData.rarity
+            }, Version: ${cardData.version}`;
+
+            // Retrieve moves associated with the card
+            const moveQuery = new Query("animeCardMoves"); // Collection for moves
+            const moves = await moveQuery.find({ cardId: cardData._id });
+
+            const formattedMoves = moves.map((move) => {
+                return `Move: ${move.moveName}, Description: ${move.moveDescription}, Type: ${move.moveType}, Base DMG: ${move.baseDMG}`;
+            });
+
+            // Retrieve associated photos
+            const photoQuery = new Query("animeCardPictures"); // Collection for photos
+            const photos = await photoQuery.find({ cardId: cardData._id });
+
+            const photoUrls = photos.map((photo) => photo.pictureData);
+
+            await interaction.reply(
+                `Data for card "${cardName}":\n${formattedData}\nMoves:\n${formattedMoves.join(
+                    "\n"
+                )}\nPhotos:\n${photoUrls.join("\n")}`
+            );
         } catch (error) {
             console.error("Error retrieving card data:", error.message);
             await interaction.reply(
                 "An error occurred while retrieving card data."
             );
+        } finally {
+            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };

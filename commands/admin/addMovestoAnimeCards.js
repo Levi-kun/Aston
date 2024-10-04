@@ -1,10 +1,8 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json");
+const Query = require("../../databases/query.js"); // Path to your Query class
 
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
-const util = require("util");
-const dbRunAsync = util.promisify(db.run.bind(db));
+const collectionName = "animeCardMoves"; // Replace with your actual collection name
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -20,50 +18,79 @@ module.exports = {
         )
         .addStringOption((option) =>
             option
-                .setName("movename")
+                .setName("name") // Updated option
                 .setDescription("Enter the name of the move")
                 .setRequired(true)
         )
         .addStringOption((option) =>
             option
-                .setName("movedescription")
+                .setName("description") // Updated option
                 .setDescription("Enter the description of the move")
+                .setRequired(true)
         )
         .addStringOption((option) =>
             option
-                .setName("movetype")
-                .setDescription(
-                    "Enter the type of the move (e.g., physical, magical)"
-                )
+                .setName("version") // New option
+                .setDescription("Enter the version of the move")
+                .setRequired(true)
         )
         .addIntegerOption((option) =>
             option
-                .setName("basedmg")
+                .setName("dmg") // New option
                 .setDescription("Enter the base damage of the move")
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("specialdmg") // New option
+                .setDescription("Enter the special damage of the move")
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("ownmodifier") // New option
+                .setDescription("Enter the own modifier of the move")
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("othermodifier") // New option
+                .setDescription("Enter the other modifier of the move")
+                .setRequired(true)
         ),
     async execute(interaction) {
         if (interaction.user.id !== ownerId) return;
 
         const cardId = interaction.options.getInteger("cardid");
-        const moveName = interaction.options.getString("movename");
-        const moveDescription =
-            interaction.options.getString("movedescription");
-        const moveType = interaction.options.getString("movetype");
-        const baseDMG = interaction.options.getInteger("basedmg");
+        const moveName = interaction.options.getString("name");
+        const moveDescription = interaction.options.getString("description");
+        const version = interaction.options.getString("version");
+        const baseDMG = interaction.options.getInteger("dmg");
+        const specialDMG = interaction.options.getInteger("specialdmg");
+        const ownModifier = interaction.options.getInteger("ownmodifier");
+        const otherModifier = interaction.options.getInteger("othermodifier");
+
+        const query = new Query(collectionName); // Instantiate the Query class
 
         try {
-            await dbRunAsync(
-                `
-                INSERT INTO animeCardMoves (cardId, moveName, moveDescription, moveType, baseDMG)
-                VALUES (?, ?, ?, ?, ?);
-            `,
-                [cardId, moveName, moveDescription, moveType, baseDMG]
-            );
+            // Insert the new move into the animeCardMoves collection
+            await query.insertOne({
+                cardId,
+                moveName,
+                moveDescription,
+                version,
+                baseDMG,
+                specialDMG,
+                ownModifier,
+                otherModifier,
+            });
 
             await interaction.reply(`Move "${moveName}" added successfully!`);
         } catch (error) {
             console.error("Error adding move:", error.message);
             await interaction.reply("An error occurred while adding the move.");
+        } finally {
+            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };

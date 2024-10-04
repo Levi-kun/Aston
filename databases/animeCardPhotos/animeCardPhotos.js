@@ -1,5 +1,5 @@
 const animepicturesListSchema = {
-    collectionName: "animeCardpictures",
+    collectionName: "animeCardPhotos",
     schema: {
         bsonType: "object", // Specifies that the root type is an object
         required: ["name", "cardId", "attachment", "pictureLink"],
@@ -43,4 +43,4 @@ const animepicturesListSchema = {
     },
 };
 
-module.exports = { animepicturesListSchema };
+module.exports = animepicturesListSchema;

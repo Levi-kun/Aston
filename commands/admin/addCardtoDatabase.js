@@ -1,58 +1,8 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ownerId } = require("../../config.json"); // Replace with your actual ownerId
+const { ownerId } = require("../../config.json");
+const Query = require("../../databases/query.js");
 
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
-const util = require("util");
-const dbRunAsync = util.promisify(db.run.bind(db));
-
-async function createOrInsertUser(
-    cardName,
-    cardValue,
-    cardCategories,
-    rarity,
-    update
-) {
-    try {
-        // Create the card pictures table (if not exists)
-        await dbRunAsync(`
-            CREATE TABLE IF NOT EXISTS "animeCardPictures" (
-                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                "cardId" INTEGER NOT NULL,
-                "attachment" INTEGER,
-                "pictureData" BLOB,
-                FOREIGN KEY ("cardId") REFERENCES "animeCardList" ("id")
-            );
-        `);
-
-        if (update) {
-            // Update existing card data for the specified card ID
-            await dbRunAsync(
-                `
-                UPDATE animeCardList
-                SET Name = ?, Value = ?, Categories = ?, Rarity = ?
-                WHERE id = ?;
-            `,
-                [cardName, cardValue, cardCategories, rarity, update]
-            );
-            console.log(
-                `Card "${cardName}" (ID ${update}) updated in the database.`
-            );
-        } else {
-            // Insert the user data into the main card data table
-            await dbRunAsync(
-                `
-                INSERT INTO animeCardList (Name, Value, Categories, Owned, focus, inPool, Rarity)
-                VALUES (?, ?, ?, 0, 0, 1, ?);
-            `,
-                [cardName, cardValue, cardCategories, rarity]
-            );
-            console.log(`Card "${cardName}" added to the database.`);
-        }
-    } catch (error) {
-        console.error("Error:", error.message);
-    }
-}
+const collectionName = "animeCardList";
 
 module.exports = {
     category: "admin",
@@ -91,7 +41,7 @@ module.exports = {
             option
                 .setName("update")
                 .setDescription(
-                    "Set to true if you want to update an existing card, false otherwise"
+                    "Enter the ID of the card to update (leave blank to create a new card)"
                 )
         ),
     async execute(interaction) {
@@ -102,24 +52,58 @@ module.exports = {
             .getString("cardname")
             .toLowerCase();
         const cardValue = interaction.options.getString("cardvalue");
-        const cardCategories = interaction.options.getString("cardcategories");
+        const cardCategories = interaction.options
+            .getString("cardcategories")
+            .split(",")
+            .map((category) => category.trim());
         const cardRarity = interaction.options.getInteger("cardrarity");
         const updateCardId = interaction.options.getInteger("update");
 
-        // Call the function to insert/update the card data
-        await createOrInsertUser(
-            cardName,
-            cardValue,
-            cardCategories,
-            cardRarity,
-            updateCardId
-        );
+        const query = new Query(collectionName); // Instantiate the Query class
 
-        // Respond to the interaction
-        await interaction.reply(
-            updateCardId
-                ? `Card "${cardName}" (ID ${updateCardId}) updated successfully!`
-                : `Card "${cardName}" created successfully!`
-        );
+        try {
+            if (updateCardId) {
+                // Update existing card data for the specified card ID
+                await query.updateOne(
+                    { _id: updateCardId },
+                    {
+                        Name: cardName,
+                        Value: cardValue,
+                        Categories: cardCategories,
+                        Rarity: cardRarity,
+                    }
+                );
+                console.log(
+                    `Card "${cardName}" (ID ${updateCardId}) updated in the database.`
+                );
+                await interaction.reply(
+                    `Card "${cardName}" (ID ${updateCardId}) updated successfully!`
+                );
+            } else {
+                // Insert the new card into the animeCardList collection
+                await query.insertOne({
+                    Name: cardName,
+                    Value: cardValue,
+                    Categories: cardCategories,
+                    Owned: 0,
+                    focus: 0,
+                    inPool: 1,
+                    Rarity: cardRarity,
+                });
+                console.log(
+                    `Card "${cardName}" created successfully in the database.`
+                );
+                await interaction.reply(
+                    `Card "${cardName}" created successfully!`
+                );
+            }
+        } catch (error) {
+            console.error("Error:", error.message);
+            await interaction.reply(
+                "An error occurred while creating or updating the card."
+            );
+        } finally {
+            await query.closeConnection(); // Close the MongoDB connection
+        }
     },
 };

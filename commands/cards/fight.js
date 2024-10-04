@@ -1,5 +1,3 @@
-// commands/fight.js
-
 const {
     SlashCommandBuilder,
     ButtonBuilder,
@@ -8,17 +6,10 @@ const {
     EmbedBuilder,
 } = require("discord.js");
 const { Battle, Card, BattleStatus } = require("../../classes/cardManager.js");
-
-const sqlite3 = require("sqlite3");
-const util = require("util");
-
-const animedb = new sqlite3.Database("databases/animeDataBase.db");
+const Query = require("../../databases/query.js"); // Path to your Query class
 
 const requiredCards = 4;
-// Promisify db methods
-const dbAllAsync = util.promisify(animedb.all.bind(animedb));
-const dbGetAsync = util.promisify(animedb.get.bind(animedb));
-const dbRunAsync = util.promisify(animedb.run.bind(animedb));
+const pvpBattleCollectionName = "pvpBattles"; // Your pvpBattles collection name
 
 module.exports = {
     category: "cards",
@@ -48,6 +39,8 @@ module.exports = {
             });
         }
 
+        const battleQuery = new Query(pvpBattleCollectionName); // Instantiate Query for pvpBattles
+
         try {
             // Check if the challenger is already in an ongoing battle
             const existingChallengerBattle = await Battle.getOngoingBattle(
@@ -75,19 +68,12 @@ module.exports = {
             }
 
             // Check if there's an existing pending challenge from challenger to challenged
-            const pendingQuery = `
-                SELECT * FROM pvpBattles 
-                WHERE guild_id = ? 
-                  AND challenger_id = ? 
-                  AND challenged_id = ? 
-                  AND status = 'pending'
-                LIMIT 1
-            `;
-            const existingChallengeRow = await dbGetAsync(pendingQuery, [
-                guildId,
-                challenger.id,
-                challenged.id,
-            ]);
+            const existingChallengeRow = await battleQuery.findOne({
+                guild_id: guildId,
+                challenger_id: challenger.id,
+                challenged_id: challenged.id,
+                status: "pending",
+            });
 
             if (existingChallengeRow) {
                 return interaction.reply({
@@ -98,20 +84,23 @@ module.exports = {
             }
 
             // Create a new battle with status 'pending'
-            const battle = await Battle.createBattle(
-                guildId,
-                challenger.id,
-                challenged.id
-            );
+            const battleData = {
+                guild_id: guildId,
+                challenger_id: challenger.id,
+                challenged_id: challenged.id,
+                status: "pending",
+                created_at: new Date(),
+            };
+            const battle = await battleQuery.insert(battleData); // Insert new battle record
 
             // Create acceptance buttons with unique identifiers including guildId and battleId
             const acceptButton = new ButtonBuilder()
-                .setCustomId(`pvp_accept_${guildId}_${battle.battleId}`)
+                .setCustomId(`pvp_accept_${guildId}_${battle.insertedId}`)
                 .setLabel("Accept")
                 .setStyle(ButtonStyle.Success);
 
             const declineButton = new ButtonBuilder()
-                .setCustomId(`pvp_decline_${guildId}_${battle.battleId}`)
+                .setCustomId(`pvp_decline_${guildId}_${battle.insertedId}`)
                 .setLabel("Decline")
                 .setStyle(ButtonStyle.Danger);
 
@@ -145,9 +134,9 @@ module.exports = {
             const filter = (i) => {
                 return (
                     (i.customId ===
-                        `pvp_accept_${guildId}_${battle.battleId}` ||
+                        `pvp_accept_${guildId}_${battle.insertedId}` ||
                         i.customId ===
-                            `pvp_decline_${guildId}_${battle.battleId}`) &&
+                            `pvp_decline_${guildId}_${battle.insertedId}`) &&
                     i.user.id === challenged.id
                 );
             };
@@ -159,9 +148,14 @@ module.exports = {
             });
 
             collector.on("collect", async (i) => {
-                if (i.customId === `pvp_accept_${guildId}_${battle.battleId}`) {
-                    // Update battle status to 'on_going' and initialize battle
-                    await battle.updateStatus(BattleStatus.ON_GOING);
+                if (
+                    i.customId === `pvp_accept_${guildId}_${battle.insertedId}`
+                ) {
+                    // UpdateOne battle status to 'on_going' and initialize battle
+                    await battleQuery.updateOne(
+                        { _id: battle.insertedId },
+                        { status: BattleStatus.ON_GOING }
+                    );
 
                     await i.update({
                         content: "You have accepted the PvP challenge!",
@@ -169,7 +163,7 @@ module.exports = {
                     });
 
                     // Proceed to card selection
-                    initiateCardSelection(
+                    await initiateCardSelection(
                         interaction,
                         battle,
                         challenger,
@@ -177,10 +171,13 @@ module.exports = {
                         guildId
                     );
                 } else if (
-                    i.customId === `pvp_decline_${guildId}_${battle.battleId}`
+                    i.customId === `pvp_decline_${guildId}_${battle.insertedId}`
                 ) {
                     // Update battle status to 'denied'
-                    await battle.updateStatus(BattleStatus.DENIED);
+                    await battleQuery.updateOne(
+                        { _id: battle.insertedId },
+                        { status: BattleStatus.DENIED }
+                    );
 
                     await i.update({
                         content: "You have declined the PvP challenge.",
@@ -190,7 +187,6 @@ module.exports = {
                     await interaction.channel
                         .send({
                             content: `${challenged} has declined your PvP challenge.`,
-                            ephemeral: true,
                         })
                         .catch(() => {});
                 }
@@ -199,7 +195,10 @@ module.exports = {
             collector.on("end", async (collected) => {
                 if (collected.size === 0) {
                     // No response within time
-                    await battle.updateStatus(BattleStatus.DENIED);
+                    await battleQuery.updateOne(
+                        { _id: battle.insertedId },
+                        { status: BattleStatus.DENIED }
+                    );
                     await challenged
                         .send(
                             "You did not respond to the PvP challenge in time. Challenge canceled."
@@ -214,6 +213,8 @@ module.exports = {
                     "An error occurred while initiating the PvP challenge.",
                 ephemeral: true,
             });
+        } finally {
+            await battleQuery.closeConnection(); // Ensure the MongoDB connection is closed
         }
     },
 };
@@ -221,7 +222,7 @@ module.exports = {
 /**
  * Initiates the card selection process for both players.
  * @param {CommandInteraction} interaction - The command interaction.
- * @param {Battle} battle - The battle instance.
+ * @param {Object} battle - The battle object from MongoDB.
  * @param {User} challenger - The challenging user.
  * @param {User} challenged - The challenged user.
  * @param {string} guildId - The Discord guild ID.
@@ -246,7 +247,10 @@ async function initiateCardSelection(
                     `You do not have enough cards to participate in a PvP battle (minimum ${requiredCards} required).`
                 )
                 .catch(() => {});
-            await battle.updateStatus(BattleStatus.DENIED);
+            await battleQuery.updateOne(
+                { _id: battle.insertedId },
+                { status: BattleStatus.DENIED }
+            );
             await challenged
                 .send(
                     "The PvP battle was canceled because the challenger does not have enough cards."
@@ -260,7 +264,10 @@ async function initiateCardSelection(
                     `You do not have enough cards to participate in a PvP battle (minimum ${requiredCards} required).`
                 )
                 .catch(() => {});
-            await battle.updateStatus(BattleStatus.DENIED);
+            await battleQuery.update(
+                { _id: battle.insertedId },
+                { status: BattleStatus.DENIED }
+            );
             await challenger
                 .send(
                     "The PvP battle was canceled because you do not have enough cards."
@@ -270,7 +277,6 @@ async function initiateCardSelection(
         }
 
         // Start card selection for both players
-        // Additional card selection logic can be implemented here as needed
         // Initialize battle with selected cards and their powers
         const initialPowersChallenger = challengerCards.map(
             (card) => card.realPower
@@ -279,9 +285,14 @@ async function initiateCardSelection(
             (card) => card.realPower
         );
 
-        await battle.initializeBattle(
-            challengerCards.map((card) => card.id),
-            challengedCards.map((card) => card.id)
+        await battleQuery.update(
+            { _id: battle.insertedId },
+            {
+                challenger_cards: challengerCards.map((card) => card.id),
+                challenged_cards: challengedCards.map((card) => card.id),
+                challenger_powers: initialPowersChallenger,
+                challenged_powers: initialPowersChallenged,
+            }
         );
 
         // Start the battle loop

@@ -60,3 +60,5 @@ const ownedCardsSchema = {
         },
     },
 };
+
+module.exports = ownedCardsSchema;

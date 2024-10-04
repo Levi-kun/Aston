@@ -1,65 +1,56 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json"); // Replace with your actual ownerId
+const Query = require("../../databases/query.js"); // Path to your Query class
 
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
-const util = require("util");
-const dbRunAsync = util.promisify(db.run.bind(db));
+const collectionName = "animeCardCategories"; // Replace with your actual collection name
 
-async function createOrInsertUser(
-    categoryName,
-    categoryPower,
-    categoryResistance,
-    categoryVariability,
-    critRate,
-    critPower,
-    domainLevel,
-    update
+async function createOrInsertCategory(
+    name,
+    categories,
+    owned,
+    rarity,
+    version,
+    dmg,
+    critChance,
+    critDamage,
+    weakness,
+    strength,
+    updateId
 ) {
+    const query = new Query(collectionName); // Instantiate the Query class
+
     try {
-        if (update) {
-            // Update existing card data for the specified card ID
-            await dbRunAsync(
-                `
-            UPDATE animeCardCategories
-            SET categoryName = ?, categoryPower = ?, categoryResistance = ?, categoryVariability = ?, CRITRATE = ?, CRITPOWER = ?, domainLevel = ?
-            WHERE id = ?;
-            `,
-                [
-                    categoryName,
-                    categoryPower,
-                    categoryResistance,
-                    categoryVariability,
-                    critRate,
-                    critPower,
-                    domainLevel,
-                    update,
-                ]
+        const categoryData = {
+            name,
+            categories, // Expecting this to be an array based on schema
+            owned,
+            rarity,
+            version,
+            dmg,
+            critChance,
+            critDamage,
+            weakness,
+            strength,
+        };
+
+        if (updateId) {
+            // Update existing category data for the specified ID
+            await query.updateOne(
+                { _id: updateId }, // MongoDB uses `_id` for document IDs
+                categoryData
             );
             console.log(
-                `Card "${categoryName}" (ID ${update}) updated in the database.`
+                `Category "${name}" (ID ${updateId}) updated in the database.`
             );
         } else {
-            // Insert the user data into the main card data table
-            await dbRunAsync(
-                `
-                INSERT INTO animeCardCategories (categoryName, categoryPower, categoryResistance, categoryVariability, CRITRATE, CRITPOWER, domainLevel)
-                VALUES (?, ?, ?, ?, ?, ?, ?);
-            `,
-                [
-                    categoryName,
-                    categoryPower,
-                    categoryResistance,
-                    categoryVariability,
-                    critRate,
-                    critPower,
-                    domainLevel,
-                ]
-            );
-            console.log(`Category "${categoryName}" added to the database.`);
+            // Insert the new category into the animeCardCategories collection
+            await query.insertOne(categoryData);
+            console.log(`Category "${name}" added to the database.`);
         }
     } catch (error) {
         console.error("Error:", error.message);
+    } finally {
+        await query.closeConnection(); // Close the MongoDB connection
     }
 }
 
@@ -70,90 +61,114 @@ module.exports = {
         .setDescription("Create categories")
         .addStringOption((option) =>
             option
-                .setName("categoryname")
+                .setName("name")
                 .setDescription("Enter the category's name")
                 .setRequired(true)
         )
         .addStringOption((option) =>
             option
-                .setName("categorypower")
-                .setDescription("Enter the modifier on the cards power")
+                .setName("categories")
+                .setDescription(
+                    "Enter the category/ies associated (comma separated)"
+                )
+                .setRequired(true)
+        )
+        .addBooleanOption((option) =>
+            option
+                .setName("owned")
+                .setDescription("Is the category owned?")
                 .setRequired(true)
         )
         .addStringOption((option) =>
             option
-                .setName("categoryresistance")
-                .setDescription("Enter the card's resistance modifier")
+                .setName("rarity")
+                .setDescription("Enter the rarity of the category")
                 .setRequired(true)
         )
         .addIntegerOption((option) =>
             option
-                .setName("categoryvariability")
-                .setDescription("Enter the card's variablity (1%-10%)")
+                .setName("version")
+                .setDescription("Enter the version of the category")
                 .setRequired(true)
         )
         .addIntegerOption((option) =>
             option
-                .setName("categorycritrate")
-                .setDescription("Enter the card's variablity (1%-10%)")
+                .setName("dmg")
+                .setDescription("Enter the damage value of the category")
                 .setRequired(true)
         )
         .addIntegerOption((option) =>
             option
-                .setName("categorycritpower")
-                .setDescription("Enter the card's variablity (1%-10%)")
-                .setRequired(true)
-        )
-        .addIntegerOption((option) =>
-            option
-                .setName("domainlevel")
+                .setName("critchance")
                 .setDescription(
-                    "(3. Highest Domain (Light vs Dark) 2. Quirky Domain 3. Attribute Domain)"
+                    "Enter the critical chance value of the category"
                 )
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("critdamage")
+                .setDescription(
+                    "Enter the critical damage value of the category"
+                )
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("weakness")
+                .setDescription("Enter the weakness value of the category")
+                .setRequired(true)
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName("strength")
+                .setDescription("Enter the strength value of the category")
                 .setRequired(true)
         )
         .addIntegerOption((option) =>
             option
                 .setName("update")
                 .setDescription(
-                    "Set to true if you want to update an existing card, false otherwise"
+                    "Enter the ID of the category to update (leave blank to create a new category)"
                 )
         ),
     async execute(interaction) {
         if (interaction.user.id !== ownerId) return;
 
         // Get option values from the interaction
-        const categoryName = interaction.options.getString("categoryname");
-        const categoryPower = interaction.options.getString("categorypower");
-        const categoryResistance =
-            interaction.options.getString("categoryresistance");
-        const categoryVariability = interaction.options.getInteger(
-            "categoryvariability"
-        );
-        const categoryCritRate =
-            interaction.options.getInteger("categorycritrate");
-        const categoryCritPower =
-            interaction.options.getInteger("categorycritpower");
-        const domainLevel = interaction.options.getInteger("domainlevel");
-        const updateCardId = interaction.options.getInteger("update");
+        const name = interaction.options.getString("name");
+        const categoriesInput = interaction.options.getString("categories");
+        const categories = categoriesInput.split(",").map((cat) => cat.trim()); // Convert string to array
+        const owned = interaction.options.getBoolean("owned");
+        const rarity = interaction.options.getString("rarity");
+        const version = interaction.options.getInteger("version");
+        const dmg = interaction.options.getInteger("dmg");
+        const critChance = interaction.options.getInteger("critchance");
+        const critDamage = interaction.options.getInteger("critdamage");
+        const weakness = interaction.options.getInteger("weakness");
+        const strength = interaction.options.getInteger("strength");
+        const updateId = interaction.options.getInteger("update");
 
-        // Call the function to insert/update the card data
-        await createOrInsertUser(
-            categoryName,
-            categoryPower,
-            categoryResistance,
-            categoryVariability,
-            categoryCritRate,
-            categoryCritPower,
-            domainLevel,
-            updateCardId
+        // Call the function to insert/update the category data
+        await createOrInsertCategory(
+            name,
+            categories,
+            owned,
+            rarity,
+            version,
+            dmg,
+            critChance,
+            critDamage,
+            weakness,
+            strength,
+            updateId
         );
 
         // Respond to the interaction
         await interaction.reply(
-            updateCardId
-                ? `Category "${categoryName}" (ID ${updateCardId}) updated successfully!`
-                : `Category "${categoryName}" created successfully!`
+            updateId
+                ? `Category "${name}" (ID ${updateId}) updated successfully!`
+                : `Category "${name}" created successfully!`
         );
     },
 };

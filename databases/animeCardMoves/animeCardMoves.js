@@ -61,4 +61,4 @@ const animemovesListSchema = {
     },
 };
 
-module.exports = { animemovesListSchema };
+module.exports = animemovesListSchema;

@@ -1,10 +1,7 @@
 const { Events } = require("discord.js");
 const eventEmitter = require("../src/eventManager");
 const schedule = require("node-schedule");
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db"); // Adjust the database path as needed
-const util = require("util");
-const dbAllAsync = util.promisify(db.all.bind(db));
+const { Query } = require("../databases/query.js");
 
 const serverSchedules = new Map();
 
@@ -15,13 +12,15 @@ function getRandomTime() {
     date.setSeconds(Math.floor(Math.random() * 60));
     return date;
 }
-async function getAmountPerServer(guildId) {
-    const query = `SELECT searchADAY FROM guildTable WHERE guildID = ?`;
 
+const guildQuery = new Query("guildDataBase");
+
+async function getAmountPerServer(guildId) {
+    const gQuery = { id: guildId };
     try {
-        const result = await dbAllAsync(query, [guildId]);
-        return result[0]?.searchADAY || 20; // Return the value or 0 if not found
+        return (await guildQuery.readOne(gQuery)) || 20;
     } catch (error) {
+        console.log(error);
         return 20;
     }
 }
@@ -63,10 +62,10 @@ function scheduleDailyReset() {
 }
 
 async function isGuildInTable(guildId) {
-    const query = `SELECT * FROM guildTable WHERE guildID = ?`;
+    const query = { id: guildId };
 
     try {
-        const result = await dbAllAsync(query, [guildId]);
+        const result = guildQuery.findOne(query).toArray();
         return result.length > 0; // Return true if guild exists, otherwise false
     } catch (error) {
         console.error(`Failed to check guild ${guildId} in the table:`, error);

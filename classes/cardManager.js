@@ -6,18 +6,9 @@ const {
     ButtonStyle,
     EmbedBuilder,
 } = require("discord.js");
-const sqlite3 = require("sqlite3");
-const util = require("util");
+const { Query } = require("../databases/query.js"); // Adjust the path accordingly
 const bot = require("../client.js");
-
-// Initialize and connect to the SQLite database
-const animedb = new sqlite3.Database("databases/animeDataBase.db");
 const eventEmitter = require("../src/eventManager");
-
-// Promisify db methods
-const dbAllAsync = util.promisify(animedb.all.bind(animedb));
-const dbGetAsync = util.promisify(animedb.get.bind(animedb));
-const dbRunAsync = util.promisify(animedb.run.bind(animedb));
 
 const BattleStatus = Object.freeze({
     PENDING: "pending",
@@ -37,7 +28,7 @@ const moveTypes = Object.freeze({
 
 class Battle {
     constructor(battleData) {
-        this.battleId = battleData.battle_id;
+        this.battleId = battleData._id; // MongoDB uses _id
         this.guildId = battleData.guild_id;
         this.challengerId = battleData.challenger_id;
         this.challengedId = battleData.challenged_id;
@@ -50,31 +41,27 @@ class Battle {
         this.created_at = battleData.created_at;
         this.finished_at = battleData.finished_at;
 
-        this.challengerCards = JSON.parse(battleData.challenger_cards || "[]");
-        this.challengedCards = JSON.parse(battleData.challenged_cards || "[]");
+        this.challengerCards = battleData.challenger_cards || [];
+        this.challengedCards = battleData.challenged_cards || [];
 
         this.battleMessages = {}; // Tracks message IDs
         this.lastMove = ""; // Stores the description of the last move
+
+        // Initialize Query instances
+        this.battlesQuery = new Query("pvpBattles");
+        this.movesQuery = new Query("pvpMoves");
     }
 
     // Static methods...
 
     static async getOngoingBattle(guildId, playerId) {
         try {
-            const query = `
-                SELECT * 
-                FROM pvpBattles 
-                WHERE guild_id = ? 
-                  AND (challenger_id = ? OR challenged_id = ?)
-                  AND status IN ('pending', 'on_going')
-                ORDER BY created_at DESC
-                LIMIT 1
-            `;
-            const result = await dbGetAsync(query, [
-                guildId,
-                playerId,
-                playerId,
-            ]);
+            const battlesQuery = new Query("pvpBattles");
+            const result = await battlesQuery.readOne({
+                guild_id: guildId,
+                $or: [{ challenger_id: playerId }, { challenged_id: playerId }],
+                status: { $in: ["pending", "on_going"] },
+            });
 
             if (result) {
                 return new Battle(result);
@@ -89,34 +76,38 @@ class Battle {
 
     static async createBattle(guildId, challengerId, challengedId) {
         try {
-            const insertBattleQuery = `
-                INSERT INTO pvpBattles (guild_id, challenger_id, challenged_id, status, created_at)
-                VALUES (?, ?, ?, 'pending', datetime('now'))
-            `;
-            await dbRunAsync(insertBattleQuery, [
-                guildId,
-                challengerId,
-                challengedId,
-            ]);
+            const battlesQuery = new Query("pvpBattles");
+            const battleData = {
+                guild_id: guildId,
+                challenger_id: challengerId,
+                challenged_id: challengedId,
+                status: BattleStatus.PENDING,
+                created_at: new Date(),
+                challenger_cards: [],
+                challenged_cards: [],
+                challenger_powers: [],
+                challenged_powers: [],
+                current_turn: null,
+                turnCount: 0,
+            };
+
+            // Validate and insert the battle data
+            await battlesQuery.insertOne(battleData);
 
             // Retrieve the newly created battle data
-            const selectQuery = `
-                SELECT * 
-                FROM pvpBattles 
-                WHERE guild_id = ? AND challenger_id = ? AND challenged_id = ? 
-                ORDER BY created_at DESC LIMIT 1
-            `;
-            const battleData = await dbGetAsync(selectQuery, [
-                guildId,
-                challengerId,
-                challengedId,
-            ]);
+            const insertedBattle = await battlesQuery.readOne(
+                {
+                    guild_id: guildId,
+                    challenger_id: challengerId,
+                    challenged_id: challengedId,
+                },
+                { sort: { created_at: -1 } }
+            );
 
-            if (!battleData)
+            if (!insertedBattle)
                 throw new Error("Failed to retrieve the created battle.");
 
-            // Return a new Battle instance using the retrieved battleData
-            return new Battle(battleData);
+            return new Battle(insertedBattle);
         } catch (error) {
             console.error(`Error creating battle: ${error.message}`);
             throw error;
@@ -151,17 +142,17 @@ class Battle {
             let loser_id = user_id;
 
             // Update the battle in the database
-            const forfeitQuery = `
-                UPDATE pvpBattles 
-                SET status = ?, winner_id = ?, loser_id = ?, finished_at = datetime('now')
-                WHERE battle_id = ?
-            `;
-            await dbRunAsync(forfeitQuery, [
-                BattleStatus.FINISHED,
-                winner_id,
-                loser_id,
-                this.battleId,
-            ]);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                {
+                    $set: {
+                        status: BattleStatus.FINISHED,
+                        winner_id: winner_id,
+                        loser_id: loser_id,
+                        finished_at: new Date(),
+                    },
+                }
+            );
 
             // Update instance properties
             this.status = BattleStatus.FINISHED;
@@ -213,22 +204,23 @@ class Battle {
     /** Save battle turn and status updates */
     async updateTurnAndStatus(newTurn, incrementStatus = true) {
         try {
-            let query, params;
+            let updateData = { current_turn: newTurn };
             if (incrementStatus) {
-                query = `UPDATE pvpBattles SET current_turn = ?, status = status + 1, turnCount = turnCount + 1 WHERE battle_id = ?`;
-                params = [newTurn, this.battleId];
-            } else {
-                query = `UPDATE pvpBattles SET current_turn = ?, status = ? WHERE battle_id = ?`;
-                params = [newTurn, this.status, this.battleId]; // Adjust as needed
+                updateData.status = BattleStatus.ON_GOING;
+                updateData.turnCount = (this.turnCount || 0) + 1;
             }
 
-            await dbRunAsync(query, params);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                { $set: updateData }
+            );
+
             this.currentTurn = newTurn;
             if (incrementStatus) {
-                this.status = BattleStatus.ON_GOING; // Ensure status remains consistent
+                this.status = BattleStatus.ON_GOING;
                 this.turnCount += 1;
             } else {
-                this.status = newTurn; // Adjust as per your logic
+                this.status = updateData.status || this.status;
             }
         } catch (error) {
             console.error(`Error updating turn and status: ${error.message}`);
@@ -259,38 +251,13 @@ class Battle {
             throw error;
         }
     }
-    async updateTurn(newTurn = 1) {
-        if (newTurn) {
-            try {
-                const query = `
-                UPDATE pvpBattles
-                SET current_turn = ?
-                WHERE battle_id = ?
-            `;
-                await dbRunAsync(query, [newTurn, this.battleId]);
-                this.currentTurn = newTurn;
-            } catch (e) {
-                console.error(`${e}`);
-            }
-        } else if (newturn === 1) {
-            const query = `
-            UPDATE pvpBattles
-            SET current_turn = current_turn + 1
-            WHERE battle_id = ?
-        `;
-            await dbRunAsync(query, [this.battleId]);
-            this.currentTurn = newTurn;
-        }
-    }
 
     async updateStatus(newStatus) {
         try {
-            const query = `
-                UPDATE pvpBattles
-                SET status = ?
-                WHERE battle_id = ?
-            `;
-            await dbRunAsync(query, [newStatus, this.battleId]);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                { $set: { status: newStatus } }
+            );
 
             // Update the instance's status as well
             this.status = newStatus;
@@ -299,6 +266,7 @@ class Battle {
             throw error;
         }
     }
+
     /**
      * Determines who goes first and allows the selected player to decide their turn order.
      */
@@ -311,11 +279,7 @@ class Battle {
                 throw new Error("First player not found.");
             }
 
-            const channel =
-                firstPlayer === this.challengerId
-                    ? await this.getBattleChannel()
-                    : player;
-
+            const channel = await this.getBattleChannel();
             if (!channel) {
                 throw new Error("Battle channel not found.");
             }
@@ -399,11 +363,11 @@ class Battle {
                 await message.delete();
             });
 
-            collector.on("end", (collected) => {
+            collector.on("end", async (collected) => {
                 if (collected.size === 0) {
                     // If no response, default to firstPlayer going first
                     this.currentTurn = firstPlayer;
-                    this.updateTurnAndStatus(this.currentTurn, false);
+                    await this.updateTurnAndStatus(this.currentTurn, false);
                     channel.send(
                         `${player.user.username} did not choose turn order. ${player.user.username} will go first by default.`
                     );
@@ -420,8 +384,10 @@ class Battle {
      */
     async incrementTurnCount() {
         try {
-            const query = `UPDATE pvpBattles SET turnCount = turnCount + 1 WHERE battle_id = ?`;
-            await dbRunAsync(query, [this.battleId]);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                { $inc: { turnCount: 1 } }
+            );
             this.turnCount += 1;
         } catch (error) {
             console.error(`Error incrementing turn count: ${error.message}`);
@@ -432,15 +398,25 @@ class Battle {
     /** Initializes battle and selects who goes first */
     async initializeBattle(challengerCards, challengedCards) {
         try {
-            this.challengerCards = await Card.getCardsByIds(
+            // Get original cards by their IDs
+            const originalChallengerCards = await Card.getCardsByIds(
                 challengerCards,
                 this.guildId
             );
-            this.challengedCards = await Card.getCardsByIds(
+            const originalChallengedCards = await Card.getCardsByIds(
                 challengedCards,
                 this.guildId
             );
 
+            // Create copies of the original cards
+            this.challengerCards = originalChallengerCards.map((card) =>
+                card.clone()
+            );
+            this.challengedCards = originalChallengedCards.map((card) =>
+                card.clone()
+            );
+
+            // Set active cards to the first card of each player
             this.activeChallengerCard = this.challengerCards[0];
             this.activeChallengedCard = this.challengedCards[0];
 
@@ -491,17 +467,19 @@ class Battle {
             const activeCard = isChallenger
                 ? this.activeChallengerCard
                 : this.activeChallengedCard;
-            const move = activeCard.MoveSet.find((m) => m.moveId === moveId);
+
+            // Use the Card class to retrieve the move
+            const move = activeCard.getMoveById(moveId);
 
             if (!move) {
                 throw new Error("Invalid move.");
             }
 
             // Calculate damage or apply effects based on move type
-            let real_dmg = 0;
+            let real_dmg = move.calculateDamage(activeCard.realPower);
+
             switch (move.moveType) {
                 case "DMG":
-                    real_dmg = move.calculateDamage(activeCard.Power);
                     await this.applyDamage(
                         isChallenger ? this.challengedId : this.challengerId,
                         real_dmg
@@ -570,6 +548,8 @@ class Battle {
                 if (this.activeChallengedCard.realPower < 0)
                     this.activeChallengedCard.realPower = 0;
             }
+
+            // Optionally, update the card's power in the database if needed
         } catch (error) {
             console.error(`Error applying damage: ${error.message}`);
             throw error;
@@ -577,7 +557,7 @@ class Battle {
     }
 
     /**
-     * Logs a move into the pvpMoves table.
+     * Logs a move into the pvpMoves collection.
      *
      * @param {string} playerId - The ID of the player making the move.
      * @param {Move} move - The move being made.
@@ -585,30 +565,33 @@ class Battle {
      */
     async logMove(playerId, move, real_dmg) {
         try {
-            const insertMoveQuery = `
-                INSERT INTO pvpMoves (battle_id, move_id, player_id, move_type, special_dmg, target_card_id, value, move_at, target_value, target_effect, modifiers, real_dmg)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
             const targetCardId =
                 playerId === this.challengerId
-                    ? this.challengedId
-                    : this.challengerId;
-            await dbRunAsync(insertMoveQuery, [
-                this.battleId,
-                move.moveId,
-                playerId,
-                move.moveType,
-                move.specialDMG || 0,
-                targetCardId,
-                move.calculateDamage(this.activeChallengerCard.Power), // Example value
-                this.turnCount,
-                playerId === this.challengerId
-                    ? this.activeChallengedCard.realPower
-                    : this.activeChallengerCard.realPower,
-                move.target_effect || "",
-                JSON.stringify(move.modifiers || {}),
-                real_dmg,
-            ]);
+                    ? this.activeChallengedCard._id // Assuming each card has a unique ID
+                    : this.activeChallengerCard._id;
+
+            const moveData = {
+                battle_id: this.battleId,
+                move_id: move.moveId,
+                player_id: playerId,
+                move_type: move.moveType,
+                special_dmg: move.specialDMG || 0,
+                target_card_id: targetCardId,
+                value: real_dmg, // Using real_dmg directly
+                move_at: new Date(),
+                target_value:
+                    playerId === this.challengerId
+                        ? this.activeChallengedCard.realPower
+                        : this.activeChallengerCard.realPower,
+                target_effect: move.target_effect || "",
+                modifiers: move.modifiers || [],
+                real_dmg: real_dmg,
+            };
+
+            // Validate move data against pvpMovesSchema
+            await this.movesQuery.validateData(moveData);
+
+            await this.movesQuery.insertOne(moveData);
         } catch (error) {
             console.error(`Error logging move: ${error.message}`);
             throw error;
@@ -698,17 +681,17 @@ class Battle {
                 winnerId === this.challengerId
                     ? this.challengedId
                     : this.challengerId;
-            const query = `
-                UPDATE pvpBattles 
-                SET status = ?, winner_id = ?, loser_id = ?, finished_at = datetime('now') 
-                WHERE battle_id = ?
-            `;
-            await dbRunAsync(query, [
-                BattleStatus.FINISHED,
-                winnerId,
-                loserId,
-                this.battleId,
-            ]);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                {
+                    $set: {
+                        status: BattleStatus.FINISHED,
+                        winner_id: winnerId,
+                        loser_id: loserId,
+                        finished_at: new Date(),
+                    },
+                }
+            );
             this.status = BattleStatus.FINISHED;
             this.winner_id = winnerId;
             this.loser_id = loserId;
@@ -734,8 +717,10 @@ class Battle {
     async rewardUser(userId, increment) {
         try {
             const column = increment > 0 ? "wins" : "losses";
-            const query = `UPDATE ${this.guildId}_users SET ${column} = ${column} + 1 WHERE user_id = ?`;
-            await dbRunAsync(query, [userId]);
+            await this.battlesQuery.updateOne(
+                { _id: this.battleId },
+                { $inc: { [`${this.guildId}_users.${column}`]: 1 } }
+            );
         } catch (error) {
             console.error(`Error rewarding user ${userId}: ${error.message}`);
             throw error;
@@ -786,7 +771,7 @@ class Battle {
  */
 class Card {
     constructor(data, moveSet) {
-        this.id = data.id;
+        this.id = data.card_id || data._id; // MongoDB uses _id
         this.Name = data.Name;
         this.category = data.category;
         this.Damage = data.dmg;
@@ -799,89 +784,163 @@ class Card {
         this.OwnerId = data.player_id;
         this.Starter = data.inGroup;
         this.MoveSet = moveSet;
-        this.realPower = data.realPower; // Assuming 'realPower' is a field
+        this.realPower = data.realPower || data.realPower; // Ensure 'realPower' is a field
     }
-
+    async cloneCard() {
+        return new card(this);
+    }
     /**
      * Static method to fetch multiple cards by their IDs.
-     * @param {Array<number>} cardIds
-     * @param {string} guildId
+     * @param {Array<string>} cardIds - Array of card IDs.
+     * @param {string} guildId - The ID of the guild.
      * @returns {Promise<Array<Card>>}
      */
     static async getCardsByIds(cardIds, guildId) {
         if (!cardIds.length) return [];
 
-        const placeholders = cardIds.map(() => "?").join(",");
+        try {
+            const ownedCardsQuery = new Query(`${guildId}_owned_Cards`);
+            const animeCardListQuery = new Query("animeCardList");
 
-        const query = `
-            SELECT oc.card_id as id, acl.Name, acl.Categories, acl.Value, acl.category, 
-                   oc.realPower, oc.vr, oc.rank, oc.move_ids, 
-                   oc.player_id, oc.inGroup
-            FROM "${guildId}_owned_Cards" oc
-            JOIN animeCardList acl ON oc.card_id = acl.id
-            WHERE oc.card_id IN (${placeholders})
-        `;
-        // Using spread to merge cardIds with guildId
-        const rows = await dbAllAsync(query, cardIds);
+            // Fetch owned card data
+            const ownedCards = await ownedCardsQuery.readMany({
+                card_id: { $in: cardIds },
+            });
 
-        // Fetch move sets for each card
-        const cards = await Promise.all(
-            rows.map(async (row) => {
-                const moveSet = await this.getMovesForCard(row.move_ids);
-                return new Card(row, moveSet);
-            })
-        );
+            if (!ownedCards.length) return [];
 
-        return cards;
+            // Extract anime card IDs from owned cards
+            const animeCardIds = ownedCards.map((card) => card.card_id);
+
+            // Fetch anime card details
+            const animeCards = await animeCardListQuery.readMany({
+                id: { $in: animeCardIds },
+            });
+
+            // Create a map for quick lookup
+            const animeCardMap = {};
+            animeCards.forEach((ac) => {
+                animeCardMap[ac.id] = ac;
+            });
+
+            // Fetch move sets for each card
+            const cards = await Promise.all(
+                ownedCards.map(async (oc) => {
+                    const animeCard = animeCardMap[oc.card_id];
+                    if (!animeCard) {
+                        console.warn(
+                            `Anime card with ID ${oc.card_id} not found.`
+                        );
+                        return null;
+                    }
+                    const moveSet = await Card.getMovesForCard(
+                        animeCard.move_ids
+                    );
+                    return new Card(
+                        {
+                            ...oc,
+                            ...animeCard,
+                        },
+                        moveSet
+                    );
+                })
+            );
+
+            // Filter out any null values due to missing anime cards
+            return cards.filter((card) => card !== null);
+        } catch (error) {
+            console.error(`Error fetching cards by IDs: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
      * Static method to fetch move sets for a card by move IDs.
-     * @param {string} move_ids - Comma-separated string of move IDs
+     * @param {string} move_ids - Comma-separated string of move IDs.
      * @returns {Promise<Array<Move>>}
      */
     static async getMovesForCard(move_ids) {
         if (!move_ids) return [];
 
-        const moveIdArray = move_ids.split(",").map((id) => id.trim());
-        const placeholders = moveIdArray.map(() => "?").join(",");
-        const query = `
-            SELECT * FROM animeCardMoves
-            WHERE moveId IN (${placeholders})
-        `;
-        const rows = await dbAllAsync(query, moveIdArray);
+        try {
+            const moveIdArray = move_ids.split(",").map((id) => id.trim());
+            const animeCardMovesQuery = new Query("animeCardMoves");
 
-        // Assuming a Move class exists to instantiate each move row
-        const moves = rows.map((row) => new Move(row));
-        return moves;
+            // Fetch move data
+            const movesData = await animeCardMovesQuery.readMany({
+                moveId: { $in: moveIdArray.map((id) => parseInt(id, 10)) },
+            });
+
+            // Instantiate Move objects
+            const moves = movesData.map((moveData) => new Move(moveData));
+            return moves;
+        } catch (error) {
+            console.error(`Error fetching moves for card: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
      * Static method to fetch a user's owned cards.
-     * @param {string} userId
-     * @param {string} guildId
+     * @param {string} userId - The ID of the user.
+     * @param {string} guildId - The ID of the guild.
      * @returns {Promise<Array<Card>>}
      */
     static async getUserCards(userId, guildId) {
-        const query = `
-            SELECT oc.card_id as id, acl.Name, acl.Categories, acl.Value, acl.category, 
-                   oc.realPower, oc.vr, oc.rank, oc.move_ids, 
-                   oc.player_id, oc.inGroup
-            FROM "${guildId}_owned_Cards" oc
-            JOIN animeCardList acl ON oc.card_id = acl.id
-            WHERE oc.player_id = ? 
-        `;
-        const rows = await dbAllAsync(query, [userId, guildId]);
+        try {
+            const ownedCardsQuery = new Query(`${guildId}_owned_Cards`);
+            const animeCardListQuery = new Query("animeCardList");
 
-        // Fetch move sets for each card
-        const cards = await Promise.all(
-            rows.map(async (row) => {
-                const moveSet = await this.getMovesForCard(row.move_ids);
-                return new Card(row, moveSet);
-            })
-        );
+            // Fetch owned cards for the user
+            const ownedCards = await ownedCardsQuery.readMany({
+                player_id: userId,
+            });
 
-        return cards;
+            if (!ownedCards.length) return [];
+
+            // Extract anime card IDs
+            const animeCardIds = ownedCards.map((card) => card.card_id);
+
+            // Fetch anime card details
+            const animeCards = await animeCardListQuery.readMany({
+                id: { $in: animeCardIds },
+            });
+
+            // Create a map for quick lookup
+            const animeCardMap = {};
+            animeCards.forEach((ac) => {
+                animeCardMap[ac.id] = ac;
+            });
+
+            // Fetch move sets for each card
+            const cards = await Promise.all(
+                ownedCards.map(async (oc) => {
+                    const animeCard = animeCardMap[oc.card_id];
+                    if (!animeCard) {
+                        console.warn(
+                            `Anime card with ID ${oc.card_id} not found.`
+                        );
+                        return null;
+                    }
+                    const moveSet = await Card.getMovesForCard(
+                        animeCard.move_ids
+                    );
+                    return new Card(
+                        {
+                            ...oc,
+                            ...animeCard,
+                        },
+                        moveSet
+                    );
+                })
+            );
+
+            // Filter out any null values due to missing anime cards
+            return cards.filter((card) => card !== null);
+        } catch (error) {
+            console.error(`Error fetching user cards: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
@@ -950,6 +1009,9 @@ class Card {
     // Additional methods related to Card can be added here.
 }
 
+/**
+ * Move class represents a move associated with a card.
+ */
 class Move {
     /**
      * Constructor for a Move.
@@ -979,7 +1041,7 @@ class Move {
     }
 
     /**
-     * Method to calculate the effective damage of this move.
+     * Calculates the effective damage of this move.
      * @param {number} cardPower - The card's power that affects the damage.
      * @returns {number} - The effective damage.
      */
@@ -989,6 +1051,36 @@ class Move {
             (cardPower / 100) *
             this.ownModifier
         );
+    }
+
+    /**
+     * Returns an EmbedBuilder object representing the move.
+     * @returns {EmbedBuilder} - The embed with move details.
+     */
+    toEmbed() {
+        return new EmbedBuilder()
+            .setTitle(this.moveName)
+            .setDescription(this.moveDescription)
+            .addFields(
+                { name: "Type", value: this.moveType, inline: true },
+                { name: "Base Damage", value: `${this.baseDMG}`, inline: true },
+                {
+                    name: "Special Damage",
+                    value: `${this.specialDMG || 0}`,
+                    inline: true,
+                },
+                {
+                    name: "Own Modifier",
+                    value: `${this.ownModifier}`,
+                    inline: true,
+                },
+                {
+                    name: "Other Modifier",
+                    value: `${this.otherModifier}`,
+                    inline: true,
+                }
+            )
+            .setColor("#FF69B4"); // Example color
     }
 }
 

@@ -1,6 +1,5 @@
 const { Events } = require("discord.js");
-const sqlite3 = require("sqlite3");
-const db = new sqlite3.Database("databases/animeDataBase.db");
+const { Query } = require("../databases/query.js");
 
 module.exports = {
     name: Events.GuildMemberRemove, // Event for player leave
@@ -11,21 +10,22 @@ module.exports = {
             const guildId = guild.id;
             const guildUserCount = guild.memberCount;
 
-            // Update the 'amountofUsers' field in the 'guildTable'
-            db.run(
-                `
-          UPDATE guildTable
-          SET amountofUsers = ?
-          WHERE guildID = ?
-          `,
-                [guildUserCount, guildId],
-                (err) => {
-                    if (err) {
-                        console.error("Error updating user count:", err);
-                    } else {
-                        console.log(`User left guild: ${member.user.tag}`);
-                    }
-                }
+            // Update the 'amountofUsers' field in the 'guildTable' in MongoDB
+            const guildQuery = new Query("guildDataBase");
+            await guildQuery.updateOne(
+                { id: guildId },
+                { $set: { amountofUsers: guildUserCount } }
+            );
+
+            // Deprecate the user document in the userDataBase
+            const userQuery = new Query("userDataBase");
+            await userQuery.updateOne(
+                { _id: member.user.id, _guildId: guildId },
+                { $set: { deprecated: true } }
+            );
+
+            console.log(
+                `User left guild and deprecated in database: ${member.user.tag}`
             );
         } catch (error) {
             console.error("Error handling user leave event:", error);

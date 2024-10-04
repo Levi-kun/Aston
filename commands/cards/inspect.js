@@ -6,15 +6,7 @@ const {
     EmbedBuilder,
     ComponentType,
 } = require("discord.js");
-const util = require("util");
-const sqlite3 = require("sqlite3");
-
-// Initialize and connect to the SQLite database
-const animedb = new sqlite3.Database("databases/animeDataBase.db");
-
-// Promisify db methods for async/await usage
-const dbAllAsync = util.promisify(animedb.all.bind(animedb));
-const dbGetAsync = util.promisify(animedb.get.bind(animedb));
+const { Query } = require("../../databases/query.js");
 
 function rarityDesignater(rarity) {
     let value = "C";
@@ -38,9 +30,7 @@ module.exports = {
         .setDMPermission(false)
         .setDescription("Inspects a card!")
         .addStringOption((option) =>
-            option
-                .setName("name")
-                .setDescription("What's the card name?")
+            option.setName("name").setDescription("What's the card name?")
         )
         .addUserOption((option) =>
             option
@@ -51,14 +41,18 @@ module.exports = {
         const cardName = interaction.options.getString("name")?.toLowerCase(); // Optional chaining for safety
         const user = interaction.options.getUser("user") || interaction.user;
 
+        const cardQuery = new Query("ownedCards");
+        const photoQuery = new Query("animeCardPhotos");
+        const animeQuery = new Query("animeCardList");
         try {
             if (!cardName) {
                 // **1. Fetch All Cards Owned by the User**
-                const query = `SELECT acl.id AS card_id, acl.Name, oc.rank, oc.realPower 
-                               FROM "${interaction.guild.id}_owned_Cards" oc
-                               JOIN animeCardList acl ON oc.card_id = acl.id
-                               WHERE oc.player_id = ?`;
-                const userCards = await dbAllAsync(query, [user.id]);
+
+                const findQuery = {
+                    player_id: user.id,
+                    guild_id: interaction.guild.id,
+                };
+                const userCards = await cardQuery.readMany(findQuery);
 
                 if (!userCards || userCards.length === 0) {
                     return interaction.reply({
@@ -68,25 +62,25 @@ module.exports = {
                 }
 
                 // **2. Fetch All Photos for the User's Cards**
-                const cardIds = userCards.map(card => card.card_id);
-                const placeholders = cardIds.map(() => '?').join(',');
-                const photoQuery = `
-                    SELECT cardId, pictureData 
-                    FROM animeCardPictures 
-                    WHERE cardId IN (${placeholders})
-                `;
-                const photos = await dbAllAsync(photoQuery, cardIds);
-
+                const cardIds = userCards.map((card) => card.card_id);
+                const pQuery = { card_id: { $in: cardIds } };
+                const photos = await photoQuery.readMany(pQuery);
+                if (!photos || photos.length === 0) {
+                    return interaction.reply({
+                        content: `No photos were found for the cards that ${user.username} has`,
+                        ephemeral: true,
+                    });
+                }
                 // **3. Assign Photos to Each Card**
                 const cardPhotosMap = {};
-                photos.forEach(photo => {
+                photos.forEach((photo) => {
                     if (!cardPhotosMap[photo.cardId]) {
                         cardPhotosMap[photo.cardId] = [];
                     }
                     cardPhotosMap[photo.cardId].push(photo.pictureData);
                 });
 
-                userCards.forEach(card => {
+                userCards.forEach((card) => {
                     card.pictures = cardPhotosMap[card.card_id] || [];
                 });
 
@@ -94,17 +88,28 @@ module.exports = {
 
                 // **4. Generate Embeds for Each Card Including Images**
                 const generateEmbed = (card, index, total) => {
-                    const firstPhoto = card.pictures.length > 0 ? card.pictures[0] : "https://example.com/default-card-image.png"; // Replace with your default image URL
+                    const firstPhoto =
+                        card.pictures.length > 0
+                            ? card.pictures[0]
+                            : "https://example.com/default-card-image.png"; // Replace with your default image URL
                     return new EmbedBuilder()
                         .setTitle(`Card: ${card.Name}`)
                         .setDescription(
-                            `**ID:** ${card.card_id}\n**Rank:** ${rarityDesignater(card.rank)}\n**Power:** ${card.realPower}`
+                            `**ID:** ${
+                                card.card_id
+                            }\n**Rank:** ${rarityDesignater(
+                                card.rank
+                            )}\n**Power:** ${card.realPower}`
                         )
                         .setImage(firstPhoto) // Display the first photo
                         .setFooter({ text: `Card ${index + 1} of ${total}` });
                 };
 
-                const embed = generateEmbed(userCards[currentIndex], currentIndex, userCards.length);
+                const embed = generateEmbed(
+                    userCards[currentIndex],
+                    currentIndex,
+                    userCards.length
+                );
 
                 // **5. Create Navigation Buttons**
                 const leftButton = new ButtonBuilder()
@@ -124,7 +129,11 @@ module.exports = {
                     .setLabel("🔍")
                     .setStyle(ButtonStyle.Success);
 
-                const actionRow = new ActionRowBuilder().addComponents(leftButton, rightButton, inspectButton);
+                const actionRow = new ActionRowBuilder().addComponents(
+                    leftButton,
+                    rightButton,
+                    inspectButton
+                );
 
                 // **6. Send Initial Embed with Buttons**
                 const message = await interaction.reply({
@@ -148,30 +157,55 @@ module.exports = {
                     }
 
                     if (i.customId === "left") {
-                        currentIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+                        currentIndex =
+                            currentIndex > 0 ? currentIndex - 1 : currentIndex;
                     } else if (i.customId === "right") {
-                        currentIndex = currentIndex < userCards.length - 1 ? currentIndex + 1 : currentIndex;
+                        currentIndex =
+                            currentIndex < userCards.length - 1
+                                ? currentIndex + 1
+                                : currentIndex;
                     } else if (i.customId === "inspect") {
                         // **8. Inspect Card Without Photos**
                         const card = userCards[currentIndex];
                         const inspectEmbed = new EmbedBuilder()
                             .setTitle(`Inspecting Card: ${card.Name}`)
                             .setDescription(
-                                `**ID:** ${card.card_id}\n**Rarity:** ${rarityDesignater(card.rank)}\n**Power:** ${card.realPower}\n**Other Details...**`
+                                `**ID:** ${
+                                    card.card_id
+                                }\n**Rarity:** ${rarityDesignater(
+                                    card.rank
+                                )}\n**Power:** ${
+                                    card.realPower
+                                }\n**Other Details...**`
                             )
-                            .setFooter({ text: `Inspected by ${interaction.user.username}` });
+                            .setFooter({
+                                text: `Inspected by ${interaction.user.username}`,
+                            });
 
-                        return i.reply({ embeds: [inspectEmbed], ephemeral: true });
+                        return i.reply({
+                            embeds: [inspectEmbed],
+                            ephemeral: true,
+                        });
                     }
 
                     // **9. Generate the New Embed with Updated Index**
-                    const newEmbed = generateEmbed(userCards[currentIndex], currentIndex, userCards.length);
+                    const newEmbed = generateEmbed(
+                        userCards[currentIndex],
+                        currentIndex,
+                        userCards.length
+                    );
 
                     // **10. Update Button States**
                     leftButton.setDisabled(currentIndex === 0);
-                    rightButton.setDisabled(currentIndex === userCards.length - 1);
+                    rightButton.setDisabled(
+                        currentIndex === userCards.length - 1
+                    );
 
-                    const newActionRow = new ActionRowBuilder().addComponents(leftButton, rightButton, inspectButton);
+                    const newActionRow = new ActionRowBuilder().addComponents(
+                        leftButton,
+                        rightButton,
+                        inspectButton
+                    );
 
                     // **11. Edit the Original Message with the New Embed and Updated Buttons**
                     await i.update({
@@ -185,8 +219,14 @@ module.exports = {
                     leftButton.setDisabled(true);
                     rightButton.setDisabled(true);
                     inspectButton.setDisabled(true);
-                    const disabledRow = new ActionRowBuilder().addComponents(leftButton, rightButton, inspectButton);
-                    message.edit({ components: [disabledRow] }).catch(console.error);
+                    const disabledRow = new ActionRowBuilder().addComponents(
+                        leftButton,
+                        rightButton,
+                        inspectButton
+                    );
+                    message
+                        .edit({ components: [disabledRow] })
+                        .catch(console.error);
                 });
             } else {
                 // **13. Existing Card Inspection Logic with Photos (If Needed)**
@@ -194,23 +234,25 @@ module.exports = {
                 // Below is an example implementation:
 
                 // **a. Fetch the Card ID Based on the Card Name**
-                const cardIDRow = await dbGetAsync(
-                    `SELECT id FROM animeCardList WHERE LOWER(Name) = ?`,
-                    [cardName]
-                );
+                const cQuery = {
+                    name: cardName,
+                };
 
-                if (!cardIDRow) {
-                    return interaction.reply({
-                        content: `No card found with the name "${cardName}".`,
-                        ephemeral: true,
-                    });
-                }
+                const card = animeQuery
+                    .readMany(cQuery)
+                    .sort({ version: -1 })
+                    .limit(1)
+                    .toArray();
 
-                const cardID = cardIDRow.id;
-
-                // **b. Fetch the User's Owned Cards with the Specified Name**
-                const query = `SELECT * FROM "${interaction.guild.id}_owned_Cards" WHERE player_id = ? AND card_id = ?`;
-                const rows = await dbAllAsync(query, [user.id, cardID]);
+                const pcQuery = {
+                    player_id: user.id,
+                    guild_id: interaction.guild.id,
+                    card_id: card[0]._id,
+                };
+                const rows = cardQuery
+                    .readmany(pcQuery)
+                    .sort({ realPower: -1 })
+                    .toArray();
 
                 if (!rows || rows.length === 0) {
                     return interaction.reply({
@@ -219,29 +261,46 @@ module.exports = {
                     });
                 }
 
-                // **c. Fetch Associated Photos**
-                const photoRow = await dbAllAsync(
-                    `SELECT pictureData FROM animeCardPictures WHERE cardId = ?`,
-                    [cardID]
-                );
-
-                const photos = photoRow.map(photo => photo.pictureData);
+                const cardIds = rows.map((card) => card.card_id);
+                const pQuery = { card_id: { $in: cardIds } };
+                const photos = await photoQuery.readMany(pQuery).toArray();
+                if (!photos || photos.length === 0) {
+                    return interaction.reply({
+                        content: `No photos were found for the cards that ${user.username} has`,
+                        ephemeral: true,
+                    });
+                }
 
                 // **d. Prepare the Carousel Data**
                 let currentIndex = 0; // Starting index for the carousel
 
                 // **e. Generate Embeds with Images**
-                const generateEmbedSpecific = (card, index, total, photoUrl) => {
+                const generateEmbedSpecific = (
+                    card,
+                    index,
+                    total,
+                    photoUrl
+                ) => {
                     return new EmbedBuilder()
                         .setTitle(`Card: ${cardName}`)
                         .setDescription(
-                            `**ID:** ${card.id}\n**Rarity:** ${rarityDesignater(card.rank)}\n**Power:** ${card.realPower}`
+                            `**ID:** ${card.id}\n**Rarity:** ${rarityDesignater(
+                                card.rank
+                            )}\n**Power:** ${card.realPower}`
                         )
-                        .setImage(photoUrl || "https://example.com/default-card-image.png") // Replace with your default image URL
+                        .setImage(
+                            photoUrl ||
+                                "https://example.com/default-card-image.png"
+                        ) // Replace with your default image URL
                         .setFooter({ text: `Card ${index + 1} of ${total}` });
                 };
 
-                const embed = generateEmbedSpecific(rows[currentIndex], currentIndex, rows.length, photos[0]);
+                const embed = generateEmbedSpecific(
+                    rows[currentIndex],
+                    currentIndex,
+                    rows.length,
+                    photos[0].attachment
+                );
 
                 // **f. Create Navigation Buttons**
                 const leftButton = new ButtonBuilder()
@@ -256,7 +315,10 @@ module.exports = {
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(rows.length === 1); // Disabled if only one card
 
-                const actionRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
+                const actionRow = new ActionRowBuilder().addComponents(
+                    leftButton,
+                    rightButton
+                );
 
                 // **g. Send the Initial Message with Embed and Buttons**
                 const message = await interaction.reply({
@@ -281,18 +343,31 @@ module.exports = {
 
                     // **i. Update the Current Index Based on Button Clicked**
                     if (i.customId === "left") {
-                        currentIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+                        currentIndex =
+                            currentIndex > 0 ? currentIndex - 1 : currentIndex;
                     } else if (i.customId === "right") {
-                        currentIndex = currentIndex < rows.length - 1 ? currentIndex + 1 : currentIndex;
+                        currentIndex =
+                            currentIndex < rows.length - 1
+                                ? currentIndex + 1
+                                : currentIndex;
                     }
 
                     // **j. Generate the New Embed**
-                    const newEmbed = generateEmbedSpecific(rows[currentIndex], currentIndex, rows.length, photos[currentIndex] || "https://example.com/default-card-image.png");
+                    const newEmbed = generateEmbedSpecific(
+                        rows[currentIndex],
+                        currentIndex,
+                        rows.length,
+                        photos[currentIndex].attachment ||
+                            "https://example.com/default-card-image.png"
+                    );
 
                     // **k. Update Button States**
                     leftButton.setDisabled(currentIndex === 0);
                     rightButton.setDisabled(currentIndex === rows.length - 1);
-                    const newActionRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
+                    const newActionRow = new ActionRowBuilder().addComponents(
+                        leftButton,
+                        rightButton
+                    );
 
                     // **l. Edit the Original Message with the New Embed and Updated Buttons**
                     await i.update({
@@ -305,8 +380,13 @@ module.exports = {
                     // **m. Disable Buttons After Collector Ends**
                     leftButton.setDisabled(true);
                     rightButton.setDisabled(true);
-                    const disabledRow = new ActionRowBuilder().addComponents(leftButton, rightButton);
-                    message.edit({ components: [disabledRow] }).catch(console.error);
+                    const disabledRow = new ActionRowBuilder().addComponents(
+                        leftButton,
+                        rightButton
+                    );
+                    message
+                        .edit({ components: [disabledRow] })
+                        .catch(console.error);
                 });
             }
         } catch (e) {

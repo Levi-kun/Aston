@@ -109,6 +109,9 @@ const userDataBase = {
             last_seen: {
                 bsonType: "timestamp",
             },
+            deprecated: {
+                bsonType: "bool",
+            },
             userProfile: {
                 bsonType: "object", // The root type is an object
                 required: [
@@ -225,4 +228,4 @@ const userDataBase = {
     },
 };
 
-module.exports = { userDataBase };
+module.exports = userDataBase;
