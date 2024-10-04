@@ -129,35 +129,31 @@ class Query {
     }
 
     async _collectionSchema(collectionName) {
-        const parentFolder = "./databases"; // Adjust the base path as needed
+        const parentFolder = path.join(__dirname, "../databases"); // Adjust to correct relative base path
 
         if (!collectionName) {
             throw new Error("Collection name is required.");
         }
 
-        const folderPath = path.join(parentFolder, collectionName); // Assuming folder name matches collectionName
-        const fileName = `${collectionName}.js`; // File name should match collectionName
+        // Correct path construction
+        const folderPath = path.join(parentFolder, collectionName);
+        const fileName = `${collectionName}.js`;
 
         try {
-            // Check if the folder exists
-            const folderExists = await fs.stat(folderPath);
-            if (folderExists.isDirectory()) {
-                const files = await fs.readdir(folderPath); // Read files in the child folder
+            const filePath = path.join(folderPath, fileName); // Build full file path
+            console.log(`Loading schema from: ${filePath}`);
 
-                if (files.includes(fileName)) {
-                    console.log(
-                        `Schema file '${fileName}' exists in '${folderPath}'.`
-                    );
-                    const schema = require(path.join(folderPath, fileName));
-                    return schema.schema; // Return the schema object
-                } else {
-                    console.error(
-                        `Schema file '${fileName}' not found in '${folderPath}'.`
-                    );
-                    return null;
-                }
+            // Require the schema file dynamically
+            const schema = require(filePath);
+
+            // Check if the schema contains valid fields
+            if (schema && schema.schema && schema.collectionName) {
+                return schema.schema;
             } else {
-                throw new Error(`'${folderPath}' is not a valid directory.`);
+                console.error(
+                    `Schema file '${fileName}' does not contain valid schema information.`
+                );
+                return null;
             }
         } catch (err) {
             console.error(`Error accessing '${folderPath}': ${err.message}`);
