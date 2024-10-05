@@ -2,7 +2,7 @@ const { Events, ActivityType } = require("discord.js");
 const clientF = require("../client.js");
 const fs = require("fs");
 const path = require("path");
-const { collectSchemasAndCreateDB } = require(`../src/createCollections.js`);
+const { collectSchemasAndCreateDB } = require(`../src/createCollections`);
 
 module.exports = {
     name: Events.ClientReady,
@@ -18,7 +18,7 @@ module.exports = {
 
         */
 
-        collectSchemasAndCreateDB(`../databases`);
+        collectSchemasAndCreateDB(path.resolve(__dirname, "../databases"));
 
         /*
 

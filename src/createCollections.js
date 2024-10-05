@@ -5,27 +5,29 @@ const path = require("path");
 
 async function collectSchemasAndCreateDB(baseFolderPath) {
     try {
+        // Ensure we are using an absolute path
+        const fullBasePath = path.resolve(baseFolderPath);
+        console.log(`Base folder path resolved to: ${fullBasePath}`);
+
         // Read all directories (each representing a collection schema) in the base folder path
         const folders = fs
-            .readdirSync(baseFolderPath)
+            .readdirSync(fullBasePath)
             .filter((file) =>
-                fs.lstatSync(path.join(baseFolderPath, file)).isDirectory()
+                fs.lstatSync(path.join(fullBasePath, file)).isDirectory()
             );
 
-        // Iterate through each folder and find schema files inside
         for (const folder of folders) {
-            const folderFullPath = path.join(baseFolderPath, folder); // Correct the folderPath usage
+            const folderFullPath = path.join(fullBasePath, folder);
+            console.log(`Loading schema from: ${folderFullPath}`);
+
             const files = fs.readdirSync(folderFullPath);
 
-            // Iterate through files in the folder to find schema files
             for (const file of files) {
                 const filePath = path.join(folderFullPath, file);
 
-                // If a file is a schema file (assuming .js schema files)
                 if (file.endsWith(".js")) {
-                    const schemaModule = require(filePath); // Require the schema
+                    const schemaModule = require(filePath);
 
-                    // Check if the schema module contains collectionName and schema fields
                     if (
                         schemaModule &&
                         schemaModule.collectionName &&
@@ -33,14 +35,11 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
                     ) {
                         const { collectionName, schema } = schemaModule;
 
-                        // Create a new Query instance with the collection name
                         const query = new Query(collectionName);
 
-                        // Connect to MongoDB and create the collection if not exists
-                        await query.connect(); // Ensure the Query instance connects properly
+                        await query.connect();
 
                         try {
-                            // Attempt to create the collection with the schema validation
                             await query.db.createCollection(collectionName, {
                                 validator: { $jsonSchema: schema },
                             });
@@ -59,7 +58,7 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
                                 );
                             }
                         } finally {
-                            await query.client.close(); // Close connection after each operation
+                            await query.client.close();
                         }
                     } else {
                         console.error(
@@ -74,7 +73,7 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
     }
 }
 
-collectSchemasAndCreateDB("../databases")
+collectSchemasAndCreateDB(path.resolve(__dirname, "../databases"))
     .then(() => console.log("Database Setup Complete"))
     .catch((err) => console.error("Error setting up database:", err));
 
