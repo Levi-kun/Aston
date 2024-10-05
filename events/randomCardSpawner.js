@@ -145,7 +145,7 @@ module.exports = {
         try {
             const query = new Query("animeCardList");
 
-            const card = await query.aggergate(1);
+            const card = await query.aggregate(1);
 
             if (!card) {
                 console.error("Card not found");

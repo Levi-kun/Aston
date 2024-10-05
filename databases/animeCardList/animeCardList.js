@@ -38,11 +38,11 @@ const animeCardListSchema = {
             },
             rarity: {
                 bsonType: "int",
-                descirption: "rarity type",
+                description: "rarity type",
             },
             version: {
                 bsonType: "int",
-                descirption: "version of the card",
+                description: "version of the card",
             },
         },
     },

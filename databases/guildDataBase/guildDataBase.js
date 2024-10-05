@@ -4,7 +4,7 @@ const guildDataBaseSchema = {
         bsonType: "object",
         required: [
             "name",
-            "id",
+            "_id",
             "amountofUsers",
             "gainADAY",
             "searchADAY",
@@ -12,18 +12,18 @@ const guildDataBaseSchema = {
         ],
         additionalProperties: false,
         properties: {
-            _id: {
-                bsonType: "objectId",
-                description: "Unique identifier for the guild",
-            },
             name: {
                 bsonType: "string",
                 minLength: 2,
                 maxLength: 32,
                 description: "Name of the guild",
             },
+            _id: {
+                bsonType: "objectId",
+                description: "Unique identifier for the guild",
+            },
             id: {
-                bsonType: "int",
+                bsonType: "string",
                 description: "Guild ID",
             },
             amountofUsers: {
@@ -43,28 +43,25 @@ const guildDataBaseSchema = {
                 description: "Amount of cards that randomly spawn",
             },
             channelInformation: {
-                bsonType: "array",
+                bsonType: "object",
                 description: "Special channel IDs",
-                items: {
-                    bsonType: "object",
-                    required: ["_id", "_type"],
-                    properties: {
-                        _id: {
-                            bsonType: "string",
-                            description: "ID of the channel",
-                        },
-                        _type: {
-                            bsonType: "string", // Use string as bsonType
-                            enum: [
-                                "default",
-                                "spawnChannel",
-                                "serverChannel",
-                                "auditLogChannel",
-                                "repostHereChannel",
-                                "battleLogsHere",
-                            ], // Enum to restrict values
-                            description: "Type of channel this is",
-                        },
+                required: ["_id", "_type"],
+                properties: {
+                    _id: {
+                        bsonType: "string",
+                        description: "ID of the channel",
+                    },
+                    _type: {
+                        bsonType: "string", // Use string as bsonType
+                        enum: [
+                            "default",
+                            "spawnChannel",
+                            "serverChannel",
+                            "auditLogChannel",
+                            "repostHereChannel",
+                            "battleLogsHere",
+                        ], // Enum to restrict values
+                        description: "Type of channel this is",
                     },
                 },
             },

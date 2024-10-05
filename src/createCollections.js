@@ -7,7 +7,6 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
     try {
         // Ensure we are using an absolute path
         const fullBasePath = path.resolve(baseFolderPath);
-        console.log(`Base folder path resolved to: ${fullBasePath}`);
 
         // Read all directories (each representing a collection schema) in the base folder path
         const folders = fs
@@ -18,8 +17,6 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
 
         for (const folder of folders) {
             const folderFullPath = path.join(fullBasePath, folder);
-            console.log(`Loading schema from: ${folderFullPath}`);
-
             const files = fs.readdirSync(folderFullPath);
 
             for (const file of files) {
@@ -43,14 +40,8 @@ async function collectSchemasAndCreateDB(baseFolderPath) {
                             await query.db.createCollection(collectionName, {
                                 validator: { $jsonSchema: schema },
                             });
-                            console.log(
-                                `Collection '${collectionName}' created/verified.`
-                            );
                         } catch (err) {
                             if (err.codeName === "NamespaceExists") {
-                                console.log(
-                                    `Collection '${collectionName}' already exists.`
-                                );
                             } else {
                                 console.error(
                                     `Error creating collection '${collectionName}':`,

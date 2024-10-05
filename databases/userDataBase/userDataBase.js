@@ -6,6 +6,10 @@ const userDataBase = {
         additionalProperties: false, // Disallow any fields that are not explicitly defined}
         properties: {
             _id: {
+                bsonType: "objectId",
+                description: "uniqueId",
+            },
+            id: {
                 bsonType: "string",
                 description: "Unique identifier for the user",
             },
@@ -77,7 +81,7 @@ const userDataBase = {
             },
             events: {
                 bsonType: "array",
-                descirption: "events joined",
+                description: "events joined",
                 items: {
                     bsonType: "object",
                     required: ["_id", "eventId", "status"],

@@ -101,9 +101,11 @@ class Query {
         });
         return result;
     }
-    async aggergate(num) {
+    async aggregate(num) {
         await this.connect();
-        return this.collection.aggergate([{ $sample: { size: num } }]);
+        return this.collection
+            .aggregate([{ $sample: { size: num } }])
+            .toArray();
     }
     // Update all documents that match the filter
     async updateAll(filter, newData) {
@@ -113,6 +115,22 @@ class Query {
             $set: newData,
         });
         return result;
+    }
+
+    async checkOne(query) {
+        await this.connect();
+        const result = await this.readOne(query);
+
+        if (!result) return false; // No document found, return false
+
+        // Check if all key-value pairs in the query match the result
+        for (const key in query) {
+            if (query[key] !== result[key]) {
+                return false; // If any key doesn't match, return false
+            }
+        }
+
+        return true; // If all key-value pairs match, return true
     }
 
     // Find one document that matches the query
@@ -141,7 +159,6 @@ class Query {
 
         try {
             const filePath = path.join(folderPath, fileName); // Build full file path
-            console.log(`Loading schema from: ${filePath}`);
 
             // Require the schema file dynamically
             const schema = require(filePath);

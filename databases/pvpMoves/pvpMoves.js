@@ -35,7 +35,6 @@ const pvpMovesSchema = {
             special_dmg: {
                 bsonType: "int",
                 description: "Special damage caused by the move",
-                default: 0,
             },
             target_card_id: {
                 bsonType: "string",
