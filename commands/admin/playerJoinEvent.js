@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json");
+
 module.exports = {
     category: "admin",
     data: new SlashCommandBuilder()
@@ -11,23 +12,31 @@ module.exports = {
                 .setDescription("You want to test Joining or Leaving boss?")
                 .setRequired(true)
                 .addChoices(
-                    { name: "Join", value: "A fresh face around here." },
+                    { name: "Join", value: "Join" },
                     {
                         name: "Leave",
-                        value: `I know your just kidding boss, but your not actually leaving, right?`,
+                        value: `Leave`,
                     }
                 )
         ),
     async execute(interaction) {
-        const inOurOut = interaction.options.getString("joinorleave");
-        if (!interaction.user.id === ownerId) return;
-        // Emit the GuildCreate event
-        if (inOurOut === "Join") {
-            interaction.client.emit("guildMemberAdd", interaction.member);
-        } else if (inOurOut === "Leave") {
-            interaction.client.emit("guildMemberRemove", interaction.member);
-        }
+        try {
+            const inOurOut = interaction.options.getString("joinorleave");
+            if (interaction.user.id !== ownerId) return;
 
-        await interaction.reply(`${interaction.user.username} has moved!`);
+            // Emit the appropriate event
+            if (inOurOut === "Join") {
+                interaction.client.emit("guildMemberAdd", interaction.member);
+            } else if (inOurOut === "Leave") {
+                interaction.client.emit(
+                    "guildMemberRemove",
+                    interaction.member
+                );
+            }
+
+            await interaction.reply(`${interaction.user.username} has moved!`);
+        } catch (e) {
+            console.log(e);
+        }
     },
 };

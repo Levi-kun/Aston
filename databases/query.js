@@ -93,12 +93,23 @@ class Query {
     }
 
     // Update one document in the collection
-    async updateOne(filter, newData) {
+    async updateOne(filter, newData, options = {}) {
         await this.connect();
-        this.validateData(newData); // Validate new data before updating
-        const result = await this.collection.updateOne(filter, {
-            $set: newData,
-        });
+        if (options.upsert !== false) {
+            options.upsert = true;
+        }
+        // Validate new data before updating
+        if (options.validateData !== false) {
+            this.validateData(newData); // Add an option to skip validation if needed
+        }
+
+        // Pass in options like arrayFilters, upsert
+        const result = await this.collection.updateOne(
+            filter,
+            { $set: newData },
+            options
+        );
+
         return result;
     }
     async aggregate(num) {
@@ -144,6 +155,35 @@ class Query {
         await this.connect();
         const result = await this.collection.findMany(query);
         return result;
+    }
+
+    // Create a new instance of the Query class for the guildDataBase
+    async updateChannelId(guildId, channelId, channelType = "default") {
+        try {
+            // Connect to the database
+            await this.connect();
+
+            // Prepare the dynamic channel field based on the type
+            const channelField = `channelInformation.${channelType}`;
+
+            // Prepare the update data
+            const updateData = {
+                [channelField]: { _id: channelId, _type: channelType }, // Set channel ID and type based on channelType
+            };
+
+            // Update the guild document with the new channel information
+            const result = await this.updateOne(
+                { id: guildId },
+                updateData,
+                { upsert: true } // Insert document if it doesn't exist
+            );
+
+            if (result.modifiedCount === 0 && result.upsertedCount === 0) {
+                throw new Error("No document was updated or inserted.");
+            }
+        } catch (error) {
+            console.error("Error updating channel ID:", error.message);
+        }
     }
 
     async _collectionSchema(collectionName) {

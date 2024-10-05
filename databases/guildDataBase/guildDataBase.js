@@ -45,23 +45,29 @@ const guildDataBaseSchema = {
             channelInformation: {
                 bsonType: "object",
                 description: "Special channel IDs",
-                required: ["_id", "_type"],
                 properties: {
-                    _id: {
-                        bsonType: "string",
-                        description: "ID of the channel",
-                    },
-                    _type: {
-                        bsonType: "string", // Use string as bsonType
-                        enum: [
-                            "default",
-                            "spawnChannel",
-                            "serverChannel",
-                            "auditLogChannel",
-                            "repostHereChannel",
-                            "battleLogsHere",
-                        ], // Enum to restrict values
-                        description: "Type of channel this is",
+                    name: {
+                        bsonType: "object",
+                        description: "nested Objects let's go!!",
+                        required: ["_id", "_type"],
+                        properties: {
+                            _id: {
+                                bsonType: "string",
+                                description: "ID of the channel",
+                            },
+                            _type: {
+                                bsonType: "string", // Use string as bsonType
+                                enum: [
+                                    "default",
+                                    "spawnChannel",
+                                    "serverChannel",
+                                    "auditLogChannel",
+                                    "repostHereChannel",
+                                    "battleLogsHere",
+                                ], // Enum to restrict values
+                                description: "Type of channel this is",
+                            },
+                        },
                     },
                 },
             },

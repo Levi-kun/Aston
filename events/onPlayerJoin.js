@@ -7,15 +7,19 @@ async function createOrInsertUser(guildId, userId, userName) {
     const userQuery = new Query("userDataBase");
 
     // Check if the user exists
-    const checkQuery = { _id: userId, _guildId: guildId };
-    const existingUser = await userQuery.readOne(checkQuery);
+    const checkQuery = { id: userId, _guildId: guildId };
+    const existingUser = await userQuery.checkOne(checkQuery);
 
     if (existingUser) {
         console.log(`User ID ${userId} already exists in the database.`);
+        const updateQuery = {
+            deprecated: false,
+        };
+        await userQuery.updateOne({ id: userId }, updateQuery);
     } else {
         // Insert the user
         const creationQuery = {
-            _id: userId,
+            id: userId,
             _guildId: guildId,
             name: userName,
         };
@@ -42,7 +46,7 @@ module.exports = {
             const guildQuery = new Query("guildDataBase");
             await guildQuery.updateOne(
                 { id: guildId },
-                { $set: { amountofUsers: guildUserCount } }
+                { amountofUsers: guildUserCount }
             );
 
             console.log(`User joined guild: ${member.user.tag}`);

@@ -153,7 +153,7 @@ module.exports = {
             }
 
             // Get the default channel ID
-            const guildQuery = new Query("guildTable");
+            const guildQuery = new Query("guildDataBase");
             const guildData = await guildQuery.readOne({ guildID: guild.id });
 
             if (!guildData) {

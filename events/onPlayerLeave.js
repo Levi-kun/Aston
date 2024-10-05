@@ -14,14 +14,14 @@ module.exports = {
             const guildQuery = new Query("guildDataBase");
             await guildQuery.updateOne(
                 { id: guildId },
-                { $set: { amountofUsers: guildUserCount } }
+                { amountofUsers: guildUserCount }
             );
 
             // Deprecate the user document in the userDataBase
             const userQuery = new Query("userDataBase");
             await userQuery.updateOne(
-                { _id: member.user.id, _guildId: guildId },
-                { $set: { deprecated: true } }
+                { id: member.user.id, _guildId: guildId },
+                { deprecated: true }
             );
 
             console.log(

@@ -55,15 +55,16 @@ module.exports = {
                         pro: false,
                     };
 
+                    await guildQuery.insertOne(creationQuery);
+
                     // Only add channelInformation if textChannel exists
                     if (textChannel) {
-                        creationQuery.channelInformation = {
-                            _id: textChannel.id, // Ensure _id is correctly populated
-                            _type: "default", // Ensure _type is correctly populated
-                        };
+                        await guildQuery.updateChannelId(
+                            guildId,
+                            textChannel.id,
+                            "default"
+                        );
                     }
-
-                    await guildQuery.insertOne(creationQuery);
                     console.log(
                         `Guild ${guildName} (${guildId}) added to database.`
                     );
