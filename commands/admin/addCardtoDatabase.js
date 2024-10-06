@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json");
-const Query = require("../../databases/query.js");
+const { Query } = require("../../databases/query.js");
 
 const collectionName = "animeCardList";
 
@@ -39,6 +39,11 @@ module.exports = {
         )
         .addIntegerOption((option) =>
             option
+                .setName("version")
+                .setDescription("Enter the version of this card")
+        )
+        .addIntegerOption((option) =>
+            option
                 .setName("update")
                 .setDescription(
                     "Enter the ID of the card to update (leave blank to create a new card)"
@@ -46,31 +51,34 @@ module.exports = {
         ),
     async execute(interaction) {
         if (interaction.user.id !== ownerId) return;
-
         // Get option values from the interaction
         const cardName = interaction.options
             .getString("cardname")
             .toLowerCase();
-        const cardValue = interaction.options.getString("cardvalue");
-        const cardCategories = interaction.options
-            .getString("cardcategories")
+        const cardValue = parseInt(
+            interaction.options.getString("cardvalue"),
+            10
+        );
+        const cardCategories = interaction.options.getString("cardcategories");
+        const categoryArray = cardCategories
             .split(",")
             .map((category) => category.trim());
+
         const cardRarity = interaction.options.getInteger("cardrarity");
         const updateCardId = interaction.options.getInteger("update");
-
+        const version = interaction.options.getInteger("version") || 0;
         const query = new Query(collectionName); // Instantiate the Query class
 
         try {
             if (updateCardId) {
                 // Update existing card data for the specified card ID
                 await query.updateOne(
-                    { _id: updateCardId },
+                    { name: cardName },
                     {
-                        Name: cardName,
-                        Value: cardValue,
-                        Categories: cardCategories,
-                        Rarity: cardRarity,
+                        name: cardName,
+                        power: cardValue,
+                        categories: categoryArray,
+                        rarity: parseInt(cardRarity, 10),
                     }
                 );
                 console.log(
@@ -81,15 +89,16 @@ module.exports = {
                 );
             } else {
                 // Insert the new card into the animeCardList collection
-                await query.insertOne({
-                    Name: cardName,
-                    Value: cardValue,
-                    Categories: cardCategories,
-                    Owned: 0,
-                    focus: 0,
-                    inPool: 1,
-                    Rarity: cardRarity,
-                });
+                const insertQuery = {
+                    name: cardName,
+                    power: cardValue,
+                    categories: categoryArray,
+                    owned: 0,
+                    rarity: parseInt(cardRarity, 10), // Convert to integer
+                    version: parseInt(version, 10), // Convert
+                };
+
+                await query.insertOne(insertQuery);
                 console.log(
                     `Card "${cardName}" created successfully in the database.`
                 );
@@ -102,8 +111,6 @@ module.exports = {
             await interaction.reply(
                 "An error occurred while creating or updating the card."
             );
-        } finally {
-            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };

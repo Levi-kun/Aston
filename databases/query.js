@@ -44,34 +44,42 @@ class Query {
             // Check if the property exists
             const value = mpath.get(key, data);
 
-            // Check for type validation
-            if (expectedType) {
+            // Enhanced type validation
+            if (value !== undefined && expectedType) {
                 const actualType = Array.isArray(value)
                     ? "array"
                     : typeof value;
 
-                if (actualType !== expectedType) {
+                // For "int" bsonType, ensure the value is an integer
+                if (expectedType === "int" && !Number.isInteger(value)) {
+                    throw new Error(
+                        `Invalid type for field '${key}'. Expected 'int', got '${typeof value}'`
+                    );
+                }
+
+                // Type mismatch
+                if (expectedType !== actualType && expectedType !== "int") {
                     throw new Error(
                         `Invalid type for field '${key}'. Expected '${expectedType}', got '${actualType}'`
                     );
                 }
             }
 
-            // Validate nested objects if they exist
-            if (propertySchema.properties) {
-                if (typeof value !== "object" || Array.isArray(value)) {
-                    throw new Error(`Field '${key}' should be an object.`);
-                }
-                // Recursively validate nested properties
+            // Validate nested objects
+            if (
+                propertySchema.properties &&
+                typeof value === "object" &&
+                !Array.isArray(value)
+            ) {
                 this.validateData(value); // Recursion for nested object validation
             }
+        }
 
-            // Check if additional properties are disallowed
-            if (schema.additionalProperties === false) {
-                for (let dataKey in data) {
-                    if (!schema.properties[dataKey]) {
-                        throw new Error(`Unexpected field: '${dataKey}'`);
-                    }
+        // Check if additional properties are disallowed
+        if (schema.additionalProperties === false) {
+            for (let dataKey in data) {
+                if (!schema.properties[dataKey]) {
+                    throw new Error(`Unexpected field: '${dataKey}'`);
                 }
             }
         }
@@ -80,7 +88,7 @@ class Query {
     // Insert one document into the collection
     async insertOne(data) {
         await this.connect(); // Ensure DB connection
-        this.validateData(data); // Validate data before inserting
+        await this.validateData(data); // Validate data before inserting
         const result = await this.collection.insertOne(data);
         return result;
     }
