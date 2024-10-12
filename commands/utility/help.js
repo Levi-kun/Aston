@@ -8,8 +8,6 @@ const {
     ChannelType,
 } = require("discord.js");
 
-const wait = require("node:timers/promises").setTimeout;
-
 module.exports = {
     category: "utility",
     data: new SlashCommandBuilder()
@@ -31,7 +29,7 @@ module.exports = {
             commandsList.push([
                 element.data.name,
                 element.data.description,
-                element.category,
+                element.category || "unassigned",
                 element.cooldown || 5,
             ])
         );

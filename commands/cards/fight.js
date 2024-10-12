@@ -213,8 +213,6 @@ module.exports = {
                     "An error occurred while initiating the PvP challenge.",
                 ephemeral: true,
             });
-        } finally {
-            await battleQuery.closeConnection(); // Ensure the MongoDB connection is closed
         }
     },
 };
