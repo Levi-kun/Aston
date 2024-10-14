@@ -4,12 +4,14 @@ const animemovesListSchema = {
         bsonType: "object", // Specifies that the root type is an object
         required: [
             "name",
-            "card_id",
+            "_id",
             "description",
             "version",
-            "dmg",
+            "value",
             "specialdmg",
             "ownModifier",
+            "parent",
+            "duration",
             "otherModifier",
         ],
         additionalProperties: false, // Disallow any fields that are not explicitly defined}
@@ -24,32 +26,44 @@ const animemovesListSchema = {
                 maxLength: 32,
                 description: "Name of the moves",
             },
-            card_id: {
+            parent: {
                 // refrence id from animeCardList
-                bsonType: "int",
-                minimum: 1000,
-                maximum: 20000,
-                description: "Power of the moves",
+                bsonType: "object",
+                description: "category this move belongs to",
+                properties: {
+                    id: {
+                        bsonType: "string",
+                        description: "name of category or name of card",
+                    },
+                    isCard: {
+                        bsonType: "bool",
+                        description: "is a card ultimate if so true",
+                    },
+                },
             },
             description: {
                 bsonType: "string",
-                description: "moves(ies) of the moves.",
+                description: "description of the move.",
             },
             version: {
                 bsonType: "int",
                 description: "Version of the moves",
             },
-            dmg: {
+            value: {
                 bsonType: "int",
-                description: "Damage value of the moves",
+                description: "Power value of the move",
             },
             specialdmg: {
                 bsonType: "int",
-                description: "ult special dmg",
+                description: "ult special dmg flat add",
             },
             ownModifier: {
                 bsonType: "int",
                 description: "modifies dmg",
+            },
+            duration: {
+                bsonType: "int",
+                description: "duration in units of turn.",
             },
             otherModifier: {
                 bsonType: "array",
