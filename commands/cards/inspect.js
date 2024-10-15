@@ -238,21 +238,14 @@ module.exports = {
                     name: cardName,
                 };
 
-                const card = animeQuery
-                    .readMany(cQuery)
-                    .sort({ version: -1 })
-                    .limit(1)
-                    .toArray();
+                const card = animeQuery.readMany(cQuery, { version: -1 }, 1);
 
                 const pcQuery = {
                     player_id: user.id,
                     guild_id: interaction.guild.id,
                     card_id: card[0]._id,
                 };
-                const rows = cardQuery
-                    .readmany(pcQuery)
-                    .sort({ realPower: -1 })
-                    .toArray();
+                const rows = cardQuery.readMany(pcQuery, { version: -1 }, 1);
 
                 if (!rows || rows.length === 0) {
                     return interaction.reply({
@@ -263,7 +256,7 @@ module.exports = {
 
                 const cardIds = rows.map((card) => card.card_id);
                 const pQuery = { card_id: { $in: cardIds } };
-                const photos = await photoQuery.readMany(pQuery).toArray();
+                const photos = await photoQuery.readMany(pQuery);
                 if (!photos || photos.length === 0) {
                     return interaction.reply({
                         content: `No photos were found for the cards that ${user.username} has`,

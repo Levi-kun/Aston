@@ -9,7 +9,7 @@ const {
 const { Query } = require("../databases/query.js"); // Adjust the path accordingly
 const bot = require("../client.js");
 const eventEmitter = require("../src/eventManager");
-const { Card, Moves } = require("./cardManager.js");
+const { Card } = require("./cardManager.js");
 const BattleStatus = Object.freeze({
     PENDING: "pending",
     DENIED: "denied",

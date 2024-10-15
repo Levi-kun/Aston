@@ -1,14 +1,13 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json"); // Replace with your actual ownerId
 const Query = require("../../databases/query.js"); // Path to your Query class
+const { ObjectId } = require("mongodb"); // Import ObjectId from MongoDB
 
-const collectionName = "animeCardCategories"; // Replace with your actual collection name
+const collectionName = "animeCardCategories"; // Collection name from schema
 
 async function createOrInsertCategory(
     name,
-    categories,
-    owned,
-    rarity,
+    resistance,
     version,
     dmg,
     critChance,
@@ -22,9 +21,7 @@ async function createOrInsertCategory(
     try {
         const categoryData = {
             name,
-            categories, // Expecting this to be an array based on schema
-            owned,
-            rarity,
+            resistance, // An array of integers, per the schema
             version,
             dmg,
             critChance,
@@ -35,8 +32,9 @@ async function createOrInsertCategory(
 
         if (updateId) {
             // Update existing category data for the specified ID
+            const objectId = new ObjectId(updateId); // Convert to ObjectId for MongoDB
             await query.updateOne(
-                { _id: updateId }, // MongoDB uses `_id` for document IDs
+                { _id: objectId }, // Use _id for MongoDB document identification
                 categoryData
             );
             console.log(
@@ -67,22 +65,10 @@ module.exports = {
         )
         .addStringOption((option) =>
             option
-                .setName("categories")
+                .setName("resistance")
                 .setDescription(
-                    "Enter the category/ies associated (comma separated)"
+                    "Enter the resistance values (comma separated integers)"
                 )
-                .setRequired(true)
-        )
-        .addBooleanOption((option) =>
-            option
-                .setName("owned")
-                .setDescription("Is the category owned?")
-                .setRequired(true)
-        )
-        .addStringOption((option) =>
-            option
-                .setName("rarity")
-                .setDescription("Enter the rarity of the category")
                 .setRequired(true)
         )
         .addIntegerOption((option) =>
@@ -125,7 +111,7 @@ module.exports = {
                 .setDescription("Enter the strength value of the category")
                 .setRequired(true)
         )
-        .addIntegerOption((option) =>
+        .addStringOption((option) =>
             option
                 .setName("update")
                 .setDescription(
@@ -137,24 +123,22 @@ module.exports = {
 
         // Get option values from the interaction
         const name = interaction.options.getString("name");
-        const categoriesInput = interaction.options.getString("categories");
-        const categories = categoriesInput.split(",").map((cat) => cat.trim()); // Convert string to array
-        const owned = interaction.options.getBoolean("owned");
-        const rarity = interaction.options.getString("rarity");
+        const resistanceInput = interaction.options.getString("resistance");
+        const resistance = resistanceInput
+            .split(",")
+            .map((val) => parseInt(val.trim(), 10)); // Convert string to array of integers
         const version = interaction.options.getInteger("version");
         const dmg = interaction.options.getInteger("dmg");
         const critChance = interaction.options.getInteger("critchance");
         const critDamage = interaction.options.getInteger("critdamage");
         const weakness = interaction.options.getInteger("weakness");
         const strength = interaction.options.getInteger("strength");
-        const updateId = interaction.options.getInteger("update");
+        const updateId = interaction.options.getString("update");
 
         // Call the function to insert/update the category data
         await createOrInsertCategory(
             name,
-            categories,
-            owned,
-            rarity,
+            resistance,
             version,
             dmg,
             critChance,

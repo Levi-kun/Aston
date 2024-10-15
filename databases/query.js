@@ -24,6 +24,13 @@ class Query {
         this.collection = this.db.collection(this.collectionName);
     }
 
+    // Disconnect from MongoDB
+    async disconnect() {
+        if (this.client.isConnected) {
+            await this.client.close();
+        }
+    }
+
     // Validate the data against the schema
     validateData(data) {
         const { schema } = this;
@@ -88,89 +95,127 @@ class Query {
     // Insert one document into the collection
     async insertOne(data) {
         await this.connect(); // Ensure DB connection
-        await this.validateData(data); // Validate data before inserting
-        const result = await this.collection.insertOne(data);
-        return result;
+        try {
+            await this.validateData(data); // Validate data before inserting
+            const result = await this.collection.insertOne(data);
+            return result;
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
     // Remove one document from the collection
     async removeOne(query) {
         await this.connect();
-        const result = await this.collection.deleteOne(query);
-        return result;
+        try {
+            const result = await this.collection.deleteOne(query);
+            return result;
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
     // Update one document in the collection
     async updateOne(filter, newData, options = {}) {
         await this.connect();
-        if (options.upsert !== false) {
-            options.upsert = true;
-        }
-        // Validate new data before updating
-        if (options.validateData !== false) {
-            this.validateData(newData); // Add an option to skip validation if needed
-        }
+        try {
+            if (options.upsert !== false) {
+                options.upsert = true;
+            }
+            // Validate new data before updating
+            if (options.validateData !== false) {
+                this.validateData(newData); // Add an option to skip validation if needed
+            }
 
-        // Pass in options like arrayFilters, upsert
-        const result = await this.collection.updateOne(
-            filter,
-            { $set: newData },
-            options
-        );
+            // Pass in options like arrayFilters, upsert
+            const result = await this.collection.updateOne(
+                filter,
+                { $set: newData },
+                options
+            );
 
-        return result;
+            return result;
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
+
     async aggregate(num) {
         await this.connect();
-        return this.collection
-            .aggregate([{ $sample: { size: num } }])
-            .toArray();
+        try {
+            return this.collection
+                .aggregate([{ $sample: { size: num } }])
+                .toArray();
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
+
     // Update all documents that match the filter
     async updateAll(filter, newData) {
         await this.connect();
-        this.validateData(newData); // Validate new data before updating
-        const result = await this.collection.updateMany(filter, {
-            $set: newData,
-        });
-        return result;
+        try {
+            this.validateData(newData); // Validate new data before updating
+            const result = await this.collection.updateMany(filter, {
+                $set: newData,
+            });
+            return result;
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
     async checkOne(query) {
         await this.connect();
-        const result = await this.readOne(query);
+        try {
+            const result = await this.readOne(query);
 
-        if (!result) return false; // No document found, return false
+            if (!result) return false; // No document found, return false
 
-        // Check if all key-value pairs in the query match the result
-        for (const key in query) {
-            if (query[key] !== result[key]) {
-                return false; // If any key doesn't match, return false
+            // Check if all key-value pairs in the query match the result
+            for (const key in query) {
+                if (query[key] !== result[key]) {
+                    return false; // If any key doesn't match, return false
+                }
             }
-        }
 
-        return true; // If all key-value pairs match, return true
+            return true; // If all key-value pairs match, return true
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
     // Find one document that matches the query
     async readOne(query) {
         await this.connect();
-        const result = await this.collection.findOne(query);
-        return result;
+        try {
+            const result = await this.collection.findOne(query);
+            return result;
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
-    async readMany(query) {
+    async readMany(query, sort = null, limit = null) {
         await this.connect();
-        const result = await this.collection.findMany(query);
-        return result;
+        try {
+            const result = await this.collection.find(query);
+            if (sort) {
+                result.sort({ sort });
+            }
+            if (limit) {
+                result.limit(limit);
+            }
+            return result.toArray();
+        } finally {
+            await this.disconnect(); // Ensure disconnect
+        }
     }
 
     // Create a new instance of the Query class for the guildDataBase
     async updateChannelId(guildId, channelId, channelType = "default") {
+        await this.connect();
         try {
-            // Connect to the database
-            await this.connect();
-
             // Prepare the dynamic channel field based on the type
             const channelField = `channelInformation.${channelType}`;
 
@@ -191,6 +236,8 @@ class Query {
             }
         } catch (error) {
             console.error("Error updating channel ID:", error.message);
+        } finally {
+            await this.disconnect(); // Ensure disconnect
         }
     }
 

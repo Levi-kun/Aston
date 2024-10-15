@@ -4,11 +4,10 @@ const animecategoryListSchema = {
         bsonType: "object", // Specifies that the root type is an object
         required: [
             "name",
-            "categories",
-            "owned",
-            "rarity",
+            "_id",
             "version",
             "dmg",
+            "resistance",
             "critChance",
             "critDamage",
             "weakness",

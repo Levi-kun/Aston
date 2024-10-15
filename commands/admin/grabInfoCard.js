@@ -1,6 +1,8 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ownerId } = require("../../config.json");
-const Query = require("../../databases/query.js"); // Path to your Query class
+const { Card } = require("../../classes/cardManager.js");
+
+const { Query } = require("../../databases/query.js"); // Path to your Query class
 
 const collectionName = "animeCardList"; // Replace with your actual collection name
 
@@ -26,7 +28,7 @@ module.exports = {
 
         try {
             // Retrieve data for the specified card name
-            const cardData = await query.findOne({ name: cardName });
+            const cardData = await query.readOne({ name: cardName });
 
             if (!cardData) {
                 await interaction.reply(
@@ -46,18 +48,25 @@ module.exports = {
 
             // Retrieve moves associated with the card
             const moveQuery = new Query("animeCardMoves"); // Collection for moves
-            const moves = await moveQuery.find({ cardId: cardData._id });
+            const moves = await moveQuery.readOne({ cardId: cardData._id });
+            let formatedMoves;
 
-            const formattedMoves = moves.map((move) => {
-                return `Move: ${move.moveName}, Description: ${move.moveDescription}, Type: ${move.moveType}, Base DMG: ${move.baseDMG}`;
-            });
-
+            if (Object.keys(moves).length == 0) {
+                formatedMoves = 0;
+            } else {
+                formattedMoves = moves.map((move) => {
+                    return `Move: ${move.moveName}, Description: ${move.moveDescription}, Type: ${move.moveType}, Base DMG: ${move.baseDMG}`;
+                });
+            }
             // Retrieve associated photos
             const photoQuery = new Query("animeCardPictures"); // Collection for photos
-            const photos = await photoQuery.find({ cardId: cardData._id });
-
-            const photoUrls = photos.map((photo) => photo.pictureData);
-
+            const photos = await photoQuery.readOne({ cardId: cardData._id });
+            let photoUrls;
+            if (Object.keys(photos).length == 0) {
+                photoUrls = 0;
+            } else {
+                photoUrls = photos.map((photo) => photo.pictureData);
+            }
             await interaction.reply(
                 `Data for card "${cardName}":\n${formattedData}\nMoves:\n${formattedMoves.join(
                     "\n"
@@ -68,8 +77,6 @@ module.exports = {
             await interaction.reply(
                 "An error occurred while retrieving card data."
             );
-        } finally {
-            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };
