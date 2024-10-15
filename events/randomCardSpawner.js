@@ -6,11 +6,25 @@ const {
 } = require("discord.js");
 const { Query } = require("../databases/query.js");
 const eventEmitter = require("../src/eventManager");
-
+const { ObjectId } = require("mongodb");
 const version = 1; // version header
 
-function capitalizeFirstLetter(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
+function capitalizeFirstLetter(str) {
+    return str
+        .split(" ")
+        .map((word) => {
+            for (let i = 0; i < word.length; i++) {
+                if (/[a-zA-Z]/.test(word.charAt(i))) {
+                    return (
+                        word.slice(0, i) +
+                        word.charAt(i).toUpperCase() +
+                        word.slice(i + 1)
+                    );
+                }
+            }
+            return word; // If no alphabetical characters, return the word as is
+        })
+        .join(" ");
 }
 
 function rarityDesignater(rarity) {
@@ -41,7 +55,7 @@ async function addToPlayer(user, card, moveId, guild) {
         const rowData = await query.insertOne({
             vr: version,
             rank: card.Rarity,
-            player_id: user.id,
+            player_id: user._id,
             guild_id: guild.id,
             realPower: power,
             move_ids: moveId,
@@ -58,9 +72,10 @@ function getRandomMultiplier(min, max) {
     return min + Math.random() * (max - min);
 }
 
-async function grabCardMoves(id) {
+async function grabCardMoves(_id) {
     const query = new Query("animeCardMoves");
-    let rows = await query.readMany({ cardId: id });
+
+    let rows = await query.readOne({ "parent.id": new ObjectId(imageId) });
 
     if (!rows || rows.length === 0) {
         rows = await query.readMany({ cardId: 0 });
@@ -71,13 +86,14 @@ async function grabCardMoves(id) {
         rows = [rows];
     }
 
-    // Extract the 'id' from each row
-    const rowIds = rows.map((row) => String(row.cardId));
+    // Extract the '_id' from each row
+    const rowIds = rows.map((row) => String(row.card._id));
 
     return rowIds.join(",");
 }
 
 async function messageCreater(image, card, defaultChannel, link, guild) {
+    console.log(image);
     const claimButton = new ButtonBuilder()
         .setCustomId("Claim")
         .setLabel("Claim this Card")
@@ -85,12 +101,12 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
     const cardEmbed = new EmbedBuilder()
         .setColor("000000")
         .setImage(`${image}`)
-        .setDescription(`[${capitalizeFirstLetter(card.Name)}](${link})`)
+        .setDescription(`${capitalizeFirstLetter(card.name)}`)
         .addFields(
-            { name: "Value", value: `${card.Value}` },
+            { name: "Value", value: `${card.power}` },
             {
                 name: "Rarity",
-                value: `${rarityDesignater(card.Rarity)}`,
+                value: `${rarityDesignater(card.rarity)}`,
                 inline: true,
             }
         );
@@ -118,7 +134,7 @@ async function messageCreater(image, card, defaultChannel, link, guild) {
                 await addToPlayer(
                     i.user,
                     card,
-                    await grabCardMoves(card.id),
+                    await grabCardMoves(card._id),
                     guild
                 );
                 await message.channel.send(
@@ -145,34 +161,37 @@ module.exports = {
         try {
             const query = new Query("animeCardList");
 
-            const card = await query.aggregate(1);
+            let card = await query.aggregate(1);
 
             if (!card) {
                 console.error("Card not found");
                 return;
             }
-
+            card = card[0];
             // Get the default channel ID
             const guildQuery = new Query("guildDataBase");
-            const guildData = await guildQuery.readOne({ guildID: guild.id });
+            const guildData = await guildQuery.readOne({ id: guild.id });
 
             if (!guildData) {
                 console.error("Guild data not found", guild.id, guild.name);
                 return;
             }
 
-            const defaultChannelId = guildData.defaultChannelId;
-            console.log(`Retrieved defaultChannelId: ${defaultChannelId}`);
+            const defaultChannelId = guildData.channelInformation.default._id;
+            const cardIdQuery = {
+                card_id: new ObjectId(card._id),
+            };
 
-            const photoQuery = new Query("animeCardPictures");
-            const photos = await photoQuery.readMany({ cardId: card.id });
+            const photoQuery = new Query("animeCardPhotos");
+            const photos = await photoQuery.readMany(cardIdQuery);
 
             if (!photos) {
-                return console.log(`Broski ${card.id} still has no images`);
+                return console.log(`Broski ${card._id} still has no images`);
             }
-
             const image = photos.map((photo) => photo.attachment);
-            const link = photos.map((photo) => photo.link || "google.com");
+            const link = photos.map(
+                (photo) => photo.linkAttachment || "@asp_levi"
+            );
 
             // Send messages to the default channel
             const defaultChannel = guild.channels.cache.get(defaultChannelId);

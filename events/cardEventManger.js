@@ -18,7 +18,7 @@ const guildQuery = new Query("guildDataBase");
 async function getAmountPerServer(guildId) {
     const gQuery = { id: guildId };
     try {
-        return (await guildQuery.readOne(gQuery)) || 20;
+        return (await guildQuery.readOne(gQuery).searchADAY) || 20;
     } catch (error) {
         console.log(error);
         return 20;
@@ -66,7 +66,7 @@ async function isGuildInTable(guildId) {
 
     try {
         const result = guildQuery.readOne(query);
-        if (result) {
+        if (Object.keys(result).length == 0) {
             return true;
         } else {
             return false;
