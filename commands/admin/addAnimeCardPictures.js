@@ -1,8 +1,10 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ownerId } = require("../../config.json"); 
-const Query = require("../../databases/query.js");
+const { ownerId } = require("../../config.json");
+const { Query } = require("../../databases/query.js");
+const { ObjectId } = require("mongodb"); // Ensure you import ObjectId
 
-const collectionName = "animeCardPhotos"; 
+const collectionName = "animeCardPhotos";
+const cardQuery = new Query("animeCardList");
 
 module.exports = {
     category: "admin",
@@ -11,11 +13,11 @@ module.exports = {
         .setDescription(
             "Add, update, or remove an image from the anime card pictures database"
         )
-        .addIntegerOption((option) =>
+        .addStringOption((option) =>
             option
-                .setName("cardid")
+                .setName("name")
                 .setDescription(
-                    "Enter the ID of the card you want to associate the image with"
+                    "Enter the name of the card you want to associate the image with"
                 )
                 .setRequired(true)
         )
@@ -39,7 +41,7 @@ module.exports = {
                 )
                 .setRequired(false)
         )
-        .addIntegerOption((option) =>
+        .addStringOption((option) =>
             option
                 .setName("imageid")
                 .setDescription("Enter the ID of the image you want to modify")
@@ -57,12 +59,23 @@ module.exports = {
         if (interaction.user.id !== ownerId) return;
 
         // Get option values from the interaction
-        const cardId = interaction.options.getInteger("cardid");
-        const imageId = interaction.options.getInteger("imageid");
+        const cardName = interaction.options.getString("name");
+        const imageId = interaction.options.getString("imageid");
         const imageUrl = interaction.options.getString("imageurl");
-        let imageLink = interaction.options.getString("imagelink");
+        const imageLink = interaction.options.getString("imagelink");
         const update = interaction.options.getBoolean("update") || false;
         const remove = interaction.options.getBoolean("remove") || false;
+
+        // Fetch the card using the name provided
+        const card = await cardQuery.readOne({ name: cardName });
+        const cardId = card ? card._id : null; // Get the ObjectId of the card
+
+        if (!cardId) {
+            await interaction.reply(
+                "Card not found. Please check the card name."
+            );
+            return;
+        }
 
         const query = new Query(collectionName); // Instantiate the Query class
 
@@ -79,19 +92,15 @@ module.exports = {
                     return;
                 }
                 // Remove the specific image by its ID
-                await query.removeOne({ _id: imageId });
+                await query.removeOne({ _id: new ObjectId(imageId) }); // Ensure you use ObjectId for _id
                 await interaction.reply(
                     `Image with ID ${imageId} removed successfully!`
                 );
                 return;
             }
 
-            const imageToInsert = imageUrl;
-
-            if (!imageToInsert) {
-                await interaction.reply(
-                    "Please provide either an image URL or attach an image."
-                );
+            if (!imageUrl) {
+                await interaction.reply("Please provide a valid image URL.");
                 return;
             }
 
@@ -104,8 +113,11 @@ module.exports = {
                 }
                 // Update existing image for the specified card ID
                 await query.updateOne(
-                    { cardId: cardId, _id: imageId },
-                    { pictureData: imageToInsert, link: imageLink }
+                    {
+                        card_id: new ObjectId(cardId),
+                        _id: new ObjectId(imageId),
+                    }, // Ensure both IDs are ObjectIds
+                    { attachment: imageUrl, pictureLink: imageLink }
                 );
                 await interaction.reply(
                     `Image updated for card ID ${cardId} successfully!`
@@ -113,10 +125,9 @@ module.exports = {
             } else {
                 // Insert the image into the animeCardPictures collection
                 await query.insertOne({
-                    cardId: cardId,
-                    attachment: 0,
-                    pictureData: imageToInsert,
-                    link: imageLink,
+                    card_id: new ObjectId(cardId), // Correctly assign ObjectId here
+                    attachment: imageUrl,
+                    pictureLink: imageLink,
                 });
                 await interaction.reply(
                     `Image added to card ID ${cardId} successfully!`
@@ -124,12 +135,9 @@ module.exports = {
             }
         } catch (error) {
             console.error("Error adding/updating/removing image:", error);
-            console.error("Stack trace:", error.stack);
             await interaction.reply(
                 "An error occurred while adding, updating, or removing the image."
             );
-        } finally {
-            await query.closeConnection(); // Close the MongoDB connection
         }
     },
 };

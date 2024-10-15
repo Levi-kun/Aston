@@ -157,7 +157,7 @@ class Card {
         }
     }
     async grabPhotos() {
-        const photos = await photoQuery.findOne({ cardId: this.card_id });
+        const photos = await photoQuery.findOne({ card_id: this.card_id });
         const photoUrls = photos.map((photo) => photo.pictureData);
 
         return photoUrls;

@@ -60,7 +60,7 @@ module.exports = {
             }
             // Retrieve associated photos
             const photoQuery = new Query("animeCardPictures"); // Collection for photos
-            const photos = await photoQuery.readOne({ cardId: cardData._id });
+            const photos = await photoQuery.readOne({ card_id: cardData._id });
             let photoUrls;
             if (Object.keys(photos).length == 0) {
                 photoUrls = 0;

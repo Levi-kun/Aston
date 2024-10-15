@@ -2,34 +2,16 @@ const animepicturesListSchema = {
     collectionName: "animeCardPhotos",
     schema: {
         bsonType: "object", // Specifies that the root type is an object
-        required: ["name", "cardId", "attachment", "pictureLink"],
+        required: ["card_id", "attachment", "pictureLink", "_id"],
         additionalProperties: false, // Disallow any fields that are not explicitly defined}
         properties: {
             _id: {
                 bsonType: "objectId",
                 description: "Unique identifier for the pictures",
             },
-            name: {
-                bsonType: "string",
-                minLength: 2,
-                maxLength: 32,
-                description: "Name of the pictures",
-            },
             card_id: {
-                // refrence id from animeCardList
-                bsonType: "int",
-            },
-            description: {
-                bsonType: "string",
-                description: "descriptions of the pictures.",
-            },
-            version: {
-                bsonType: "int",
-                description: "Version of the pictures",
-            },
-            rarity: {
-                bsonType: "int",
-                description: "Rarity of the type of picture",
+                bsonType: "objectId",
+                description: "unique identifier for the parent card",
             },
             attachment: {
                 bsonType: "string",
