@@ -1,6 +1,6 @@
 // forfeit.js
 
-const { Battle } = require("../../classes/cardManager.js");
+const { Battle } = require("../../classes/battle.js");
 const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
@@ -17,7 +17,7 @@ module.exports = {
         try {
             // Retrieve and handle the battle
             const battle = await Battle.getOngoingBattle(guildId, loserId);
-            if (!battle) {
+            if (Object.keys(battle).length == 0) {
                 return interaction.reply({
                     content: "You are not currently in an ongoing battle!",
                     ephemeral: true,
@@ -31,7 +31,7 @@ module.exports = {
             await interaction.reply({ content, ephemeral: true });
 
             const battleChannel = await battle.getBattleChannel();
-            if (battleChannel) {
+            if (Object.keys(battleChannel).length == 0) {
                 await battleChannel.send({
                     content: `<@${loserId}> has forfeited the battle. <@${winnerId}> wins by default!`,
                 });

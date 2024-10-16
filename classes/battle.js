@@ -30,8 +30,8 @@ class Battle {
     constructor(battleData) {
         this.battleId = battleData._id; // MongoDB uses _id
         this.guildId = battleData.guild_id;
-        this.challengerId = battleData.challenger_id;
-        this.challengedId = battleData.challenged_id;
+        this.challenger_id = battleData.challenger_id;
+        this.challenged_id = battleData.challenged_id;
         this.status = battleData.status;
         this.currentTurn = battleData.current_turn; // User ID of current turn
         this.winner_id = battleData.winner_id || null;
@@ -54,12 +54,17 @@ class Battle {
 
     // Static methods...
 
-    static async getOngoingBattle(guildId, playerId) {
+    static async getOngoingBattle(guildId, playerId1, playerId2 = null) {
         try {
             const battlesQuery = new Query("pvpBattles");
             const result = await battlesQuery.readOne({
                 guild_id: guildId,
-                $or: [{ challenger_id: playerId }, { challenged_id: playerId }],
+                $or: [
+                    { challenger_id: playerId1 },
+                    { challenged_id: playerId1 },
+                    { challenger_id: playerId2 },
+                    { challenged_id: playerId2 },
+                ],
                 status: { $in: ["pending", "on_going"] },
             });
 
@@ -74,13 +79,13 @@ class Battle {
         }
     }
 
-    static async createBattle(guildId, challengerId, challengedId) {
+    static async createBattle(guildId, challenger_id, challenged_id) {
         try {
             const battlesQuery = new Query("pvpBattles");
             const battleData = {
                 guild_id: guildId,
-                challenger_id: challengerId,
-                challenged_id: challengedId,
+                challenger_id: challenger_id,
+                challenged_id: challenged_id,
                 status: BattleStatus.PENDING,
                 created_at: new Date(),
                 challenger_cards: [],
@@ -98,8 +103,8 @@ class Battle {
             const insertedBattle = await battlesQuery.readOne(
                 {
                     guild_id: guildId,
-                    challenger_id: challengerId,
-                    challenged_id: challengedId,
+                    challenger_id: challenger_id,
+                    challenged_id: challenged_id,
                 },
                 { sort: { created_at: -1 } }
             );
@@ -128,17 +133,17 @@ class Battle {
                 throw new Error("Battle is not ongoing.");
             }
             if (
-                this.challengerId !== user_id &&
-                this.challengedId !== user_id
+                this.challenger_id !== user_id &&
+                this.challenged_id !== user_id
             ) {
                 throw new Error("User is not part of this battle.");
             }
 
             // Determine the winner and loser
             let winner_id =
-                this.challengerId === user_id
-                    ? this.challengedId
-                    : this.challengerId;
+                this.challenger_id === user_id
+                    ? this.challenged_id
+                    : this.challenger_id;
             let loser_id = user_id;
 
             // Update the battle in the database
@@ -168,7 +173,7 @@ class Battle {
             return valuesToSendBack;
         } catch (error) {
             console.error(`Error in forfeit: ${error.message}`);
-            throw error;
+            return "No battle on going";
         }
     }
 
@@ -273,7 +278,7 @@ class Battle {
     async chooseFirstPlayer() {
         try {
             const firstPlayer =
-                Math.random() < 0.5 ? this.challengerId : this.challengedId;
+                Math.random() < 0.5 ? this.challenger_id : this.challenged_id;
             const player = await this.getPlayerFromId(firstPlayer);
             if (!player) {
                 throw new Error("First player not found.");
@@ -334,9 +339,9 @@ class Battle {
                 } else if (choice === "2") {
                     // Set turn to the other player
                     this.currentTurn =
-                        player.id === this.challengerId
-                            ? this.challengedId
-                            : this.challengerId;
+                        player.id === this.challenger_id
+                            ? this.challenged_id
+                            : this.challenger_id;
                 }
 
                 // Update the battle in the database
@@ -463,7 +468,7 @@ class Battle {
     /** Handle move made by player */
     async handleMove(playerId, moveId) {
         try {
-            const isChallenger = playerId === this.challengerId;
+            const isChallenger = playerId === this.challenger_id;
             const activeCard = isChallenger
                 ? this.activeChallengerCard
                 : this.activeChallengedCard;
@@ -481,7 +486,7 @@ class Battle {
             switch (move.moveType) {
                 case "DMG":
                     await this.applyDamage(
-                        isChallenger ? this.challengedId : this.challengerId,
+                        isChallenger ? this.challenged_id : this.challenger_id,
                         real_dmg
                     );
                     break;
@@ -512,8 +517,8 @@ class Battle {
 
             // Switch turn to the other player
             this.currentTurn = isChallenger
-                ? this.challengedId
-                : this.challengerId;
+                ? this.challenged_id
+                : this.challenger_id;
             await this.updateTurnAndStatus(this.currentTurn, false);
 
             await this.sendFieldUpdate();
@@ -539,7 +544,7 @@ class Battle {
      */
     async applyDamage(targetId, damage) {
         try {
-            if (targetId === this.challengerId) {
+            if (targetId === this.challenger_id) {
                 this.activeChallengerCard.realPower -= damage;
                 if (this.activeChallengerCard.realPower < 0)
                     this.activeChallengerCard.realPower = 0;
@@ -566,7 +571,7 @@ class Battle {
     async logMove(playerId, move, real_dmg) {
         try {
             const targetCardId =
-                playerId === this.challengerId
+                playerId === this.challenger_id
                     ? this.activeChallengedCard._id // Assuming each card has a unique ID
                     : this.activeChallengerCard._id;
 
@@ -580,7 +585,7 @@ class Battle {
                 value: real_dmg, // Using real_dmg directly
                 move_at: new Date(),
                 target_value:
-                    playerId === this.challengerId
+                    playerId === this.challenger_id
                         ? this.activeChallengedCard.realPower
                         : this.activeChallengerCard.realPower,
                 target_effect: move.target_effect || "",
@@ -634,8 +639,8 @@ class Battle {
 
     /** Determines the winner of the battle */
     getWinner() {
-        if (this.activeChallengerCard.realPower <= 0) return this.challengedId;
-        if (this.activeChallengedCard.realPower <= 0) return this.challengerId;
+        if (this.activeChallengerCard.realPower <= 0) return this.challenged_id;
+        if (this.activeChallengedCard.realPower <= 0) return this.challenger_id;
         return null;
     }
 
@@ -678,9 +683,9 @@ class Battle {
     async updateBattleConclusion(winnerId) {
         try {
             const loserId =
-                winnerId === this.challengerId
-                    ? this.challengedId
-                    : this.challengerId;
+                winnerId === this.challenger_id
+                    ? this.challenged_id
+                    : this.challenger_id;
             await this.battlesQuery.updateOne(
                 { _id: this.battleId },
                 {
@@ -705,9 +710,9 @@ class Battle {
     /** Reward users for win/loss */
     async rewardPlayers(winnerId) {
         const loserId =
-            winnerId === this.challengerId
-                ? this.challengedId
-                : this.challengerId;
+            winnerId === this.challenger_id
+                ? this.challenged_id
+                : this.challenger_id;
 
         await this.rewardUser(winnerId, 1); // 1 for win
         await this.rewardUser(loserId, -1); // -1 for loss

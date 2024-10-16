@@ -5,8 +5,9 @@ const {
     ActionRowBuilder,
     EmbedBuilder,
 } = require("discord.js");
-const { Battle, Card, BattleStatus } = require("../../classes/cardManager.js");
-const Query = require("../../databases/query.js"); // Path to your Query class
+const { Battle, BattleStatus } = require("../../classes/battle.js");
+const { Card } = require("../../classes/cardManager.js");
+const { Query } = require("../../databases/query.js"); // Path to your Query class
 
 const requiredCards = 4;
 const pvpBattleCollectionName = "pvpBattles"; // Your pvpBattles collection name
@@ -45,30 +46,18 @@ module.exports = {
             // Check if the challenger is already in an ongoing battle
             const existingChallengerBattle = await Battle.getOngoingBattle(
                 guildId,
-                challenger.id
+                challenger.id,
+                challenged.id
             );
-            if (existingChallengerBattle) {
+            if (Object.keys(existingChallengerBattle) === 0) {
                 return interaction.reply({
                     content: "You are already engaged in an ongoing battle.",
                     ephemeral: true,
                 });
             }
 
-            // Check if the challenged user is already in an ongoing battle
-            const existingChallengedBattle = await Battle.getOngoingBattle(
-                guildId,
-                challenged.id
-            );
-            if (existingChallengedBattle) {
-                return interaction.reply({
-                    content:
-                        "The challenged user is already engaged in an ongoing battle.",
-                    ephemeral: true,
-                });
-            }
-
             // Check if there's an existing pending challenge from challenger to challenged
-            const existingChallengeRow = await battleQuery.findOne({
+            const existingChallengeRow = await battleQuery.readOne({
                 guild_id: guildId,
                 challenger_id: challenger.id,
                 challenged_id: challenged.id,
@@ -91,7 +80,7 @@ module.exports = {
                 status: "pending",
                 created_at: new Date(),
             };
-            const battle = await battleQuery.insert(battleData); // Insert new battle record
+            const battle = await battleQuery.insertOne(battleData); // Insert new battle record
 
             // Create acceptance buttons with unique identifiers including guildId and battleId
             const acceptButton = new ButtonBuilder()
