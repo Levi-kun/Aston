@@ -37,7 +37,7 @@ const ownedCardsSchema = {
                 description: "Rank of the card",
             },
             card_id: {
-                bsonType: "int",
+                bsonType: "objectId",
                 description: "ID of the card",
             },
             player_id: {

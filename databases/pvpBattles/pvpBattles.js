@@ -10,74 +10,115 @@ const pvpBattlesSchema = {
             "created_at",
         ],
         properties: {
-            _id: {
-                bsonType: "objectId",
-                description: "Unique identifier for the battle",
-            },
-            guild_id: {
-                bsonType: "string",
-                description: "ID of the guild where the battle is happening",
-            },
-            challenger_id: {
-                bsonType: "string",
-                description: "ID of the challenger user",
-            },
-            challenged_id: {
-                bsonType: "string",
-                description: "ID of the user being challenged",
-            },
+            _id: { bsonType: "objectId" },
+            guild_id: { bsonType: "string" },
+            challenger_id: { bsonType: "string" },
+            challenged_id: { bsonType: "string" },
             challenger_cards: {
                 bsonType: "array",
-                items: { bsonType: "string" },
-                description: "List of card IDs used by the challenger",
+                items: {
+                    bsonType: "object",
+                    properties: {
+                        _id: { bsonType: "objectId" },
+                        card_id: { bsonType: "objectId" },
+                        name: { bsonType: "string" },
+                        power: { bsonType: "int" }, // Real-time power during battle
+                        health: { bsonType: "int" }, // Real-time health during battle
+                        rank: { bsonType: "string" },
+                        version: { bsonType: "string" },
+                        move_sets: {
+                            bsonType: "array",
+                            items: { bsonType: "object" }, // List of moves during battle
+                        },
+                        buffs: {
+                            bsonType: "array",
+                            items: {
+                                bsonType: "object",
+                                properties: {
+                                    sourceCard: { bsonType: "string" }, // Card applying the buff
+                                    targetAttribute: { bsonType: "string" }, // Attribute affected
+                                    value: { bsonType: "int" }, // Amount of buff
+                                    duration: { bsonType: "int" }, // Turns the buff lasts
+                                    appliedAt: { bsonType: "date" }, // Timestamp of application
+                                },
+                            },
+                        },
+                        debuffs: {
+                            bsonType: "array",
+                            items: {
+                                bsonType: "object",
+                                properties: {
+                                    sourceCard: { bsonType: "string" },
+                                    targetAttribute: { bsonType: "string" },
+                                    value: { bsonType: "int" },
+                                    duration: { bsonType: "int" },
+                                    appliedAt: { bsonType: "date" },
+                                },
+                            },
+                        },
+                    },
+                },
             },
             challenged_cards: {
                 bsonType: "array",
-                items: { bsonType: "string" },
-                description: "List of card IDs used by the challenged",
+                items: {
+                    bsonType: "object",
+                    properties: {
+                        _id: { bsonType: "objectId" },
+                        card_id: { bsonType: "objectId" },
+                        name: { bsonType: "string" },
+                        power: { bsonType: "int" },
+                        health: { bsonType: "int" },
+                        rank: { bsonType: "string" },
+                        version: { bsonType: "string" },
+                        move_sets: {
+                            bsonType: "array",
+                            items: { bsonType: "object" },
+                        },
+                        buffs: {
+                            bsonType: "array",
+                            items: {
+                                bsonType: "object",
+                                properties: {
+                                    sourceCard: { bsonType: "string" },
+                                    targetAttribute: { bsonType: "string" },
+                                    value: { bsonType: "int" },
+                                    duration: { bsonType: "int" },
+                                    appliedAt: { bsonType: "date" },
+                                },
+                            },
+                        },
+                        debuffs: {
+                            bsonType: "array",
+                            items: {
+                                bsonType: "object",
+                                properties: {
+                                    sourceCard: { bsonType: "string" },
+                                    targetAttribute: { bsonType: "string" },
+                                    value: { bsonType: "int" },
+                                    duration: { bsonType: "int" },
+                                    appliedAt: { bsonType: "date" },
+                                },
+                            },
+                        },
+                    },
+                },
             },
             challenger_powers: {
                 bsonType: "array",
                 items: { bsonType: "string" },
-                description:
-                    "List of powers associated with the challenger's cards",
             },
             challenged_powers: {
                 bsonType: "array",
                 items: { bsonType: "string" },
-                description:
-                    "List of powers associated with the challenged user's cards",
             },
-            current_turn: {
-                bsonType: "string",
-                description: "ID of the player whose turn it currently is",
-            },
-            status: {
-                bsonType: "string",
-                description: "Status of the battle (e.g., ongoing, finished)",
-            },
-            created_at: {
-                bsonType: "date",
-                description: "The date and time when the battle was created",
-            },
-            winner_id: {
-                bsonType: "string",
-                description: "ID of the player who won the battle",
-            },
-            loser_id: {
-                bsonType: "string",
-                description: "ID of the player who lost the battle",
-            },
-            turnCount: {
-                bsonType: "int",
-                description: "Total number of turns in the battle",
-            },
-            finished_at: {
-                bsonType: "date",
-                description: "The date and time when the battle ended",
-            },
+            current_turn: { bsonType: "string" },
+            status: { bsonType: "string" },
+            created_at: { bsonType: "date" },
+            winner_id: { bsonType: "string" },
+            loser_id: { bsonType: "string" },
+            turnCount: { bsonType: "int" },
+            finished_at: { bsonType: "date" },
         },
     },
 };
-
-module.exports = pvpBattlesSchema;
