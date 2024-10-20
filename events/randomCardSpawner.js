@@ -174,6 +174,7 @@ function powerSpawner(value, power) {
 
 async function addToPlayer(user, card, guild, power) {
 	const query = new Query("ownedCards");
+	const listQuery = new Query("animeCardList");
 	try {
 		const moveIds = await grabCardMoves(card).then((moves) =>
 			moves.map((move) => move._id)
@@ -185,11 +186,17 @@ async function addToPlayer(user, card, guild, power) {
 			guild_id: guild.id,
 			realPower: power,
 			move_ids: moveIds,
-			card_id: card._id,
+			card_id: new ObjectId(card._id),
 			inGroup: false, // or set it based on your logic
 		};
 		console.log(rowQuery);
 		const rowData = await query.insertOne(rowQuery);
+		if (query.checkOne(rowQuery)) {
+			listQuery.updateOne(
+				{ _id: new ObjectId(card._id) },
+				{ $inc: { owned: 1 } }
+			);
+		}
 		return rowData;
 	} catch (err) {
 		console.error(`Error inserting into ownedCards: ${err.message}`);
