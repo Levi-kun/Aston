@@ -56,7 +56,7 @@ async function scheduleRandomJobsForServer(guild) {
 function scheduleDailyReset() {
 	schedule.scheduleJob("0 0 * * *", async () => {
 		client.guilds.cache.forEach(async (guild) => {
-			await scheduleRandomJobsForServer(guild.id);
+			await scheduleRandomJobsForServer(guild);
 		});
 	});
 }

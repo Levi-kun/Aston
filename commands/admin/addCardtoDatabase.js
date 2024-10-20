@@ -90,14 +90,13 @@ module.exports = {
 			} else {
 				// Insert the new card into the animeCardList collection
 				const insertQuery = {
-					name: cardName,
-					power: cardValue,
+					name: `${cardName}`,
+					power: parseInt(cardValue, 10),
 					categories: categoryArray,
 					owned: 0,
 					rarity: parseInt(cardRarity, 10), // Convert to integer
 					version: parseInt(version, 10), // Convert
 				};
-
 				await query.insertOne(insertQuery);
 				console.log(
 					`Card "${cardName}" created successfully in the database.`
