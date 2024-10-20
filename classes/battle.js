@@ -28,28 +28,45 @@ const moveTypes = Object.freeze({
 
 class Battle {
 	constructor(battleData) {
-		this.battleId = battleData._id; // MongoDB uses _id
-		this.guildId = battleData.guild_id;
-		this.challenger_id = battleData.challenger_id;
-		this.challenged_id = battleData.challenged_id;
-		this.status = battleData.status;
-		this.currentTurn = battleData.current_turn; // User ID of current turn
-		this.winner_id = battleData.winner_id || null;
-		this.loser_id = battleData.loser_id || null;
-		this.turnCount = battleData.turnCount || 0;
 
-		this.created_at = battleData.created_at;
-		this.finished_at = battleData.finished_at;
+		// ID information,
 
-		this.challengerCards = battleData.challenger_cards || [];
-		this.challengedCards = battleData.challenged_cards || [];
+		this._id= battleData._id; // The _id of the battle row data object from the database.
+		this.guild_id = battleData.guild_id; // the guild ID of where this battle is taking place.
 
-		this.battleMessages = {}; // Tracks message IDs
-		this.lastMove = ""; // Stores the description of the last move
+		this.challenger_id = battleData.challenger_id; // the user ID of the user who initiated the battle.
+		this.challenger_cards = battleData.challenger_cards; // an array of objects that contains information on the challenger's cards
+		
+		this.challenged_id = battleData.challenged_id; // the user ID of the user being challenged.
+		this.challenged_cards = battleData.challenged_cards; // an array of objects that contains information on the challenged's cards
 
-		// Initialize Query instances
-		this.battlesQuery = new Query("pvpBattles");
-		this.movesQuery = new Query("pvpMoves");
+		
+		/** 
+		@Legacy battleData @objects are deprecated. 
+
+		* this.battleId = battleData._id; // MongoDB uses _id
+		* this.guildId = battleData.guild_id;
+		* this.challenger_id = battleData.challenger_id;
+		* this.challenged_id = battleData.challenged_id;
+		* this.status = battleData.status;
+		* this.currentTurn = battleData.current_turn; // User ID of current turn
+		* this.winner_id = battleData.winner_id || null;
+		* this.loser_id = battleData.loser_id || null;
+		* this.turnCount = battleData.turnCount || 0;
+* 
+		* this.created_at = battleData.created_at;
+		* this.finished_at = battleData.finished_at;
+* 
+		* this.challengerCards = battleData.challenger_cards || [];
+		* this.challengedCards = battleData.challenged_cards || [];
+* 
+		* this.battleMessages = {}; // Tracks message IDs
+		* this.lastMove = ""; // Stores the description of the last move
+* 
+		* // Initialize Query instances
+		* this.battlesQuery = new Query("pvpBattles");
+		* this.movesQuery = new Query("pvpMoves");
+		*/
 	}
 
 	// Static methods...

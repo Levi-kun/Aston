@@ -24,7 +24,7 @@ const pvpBattlesSchema = {
 						card_id: { bsonType: "objectId" },
 						name: { bsonType: "string" },
 						power: { bsonType: "int" }, // Real-time power during battle
-						health: { bsonType: "int" }, // Real-time health during battle
+						health: { bsonType: "int" }, // Real-time health  during battle
 						rank: { bsonType: "string" },
 						version: { bsonType: "string" },
 						move_sets: {
@@ -84,6 +84,7 @@ const pvpBattlesSchema = {
 							items: {
 								bsonType: "object",
 								properties: {
+									move_id: { bsonType: "objectId" },
 									move_name: { bsonType: "string" },
 									move_power: { bsonType: "int" },
 								},
