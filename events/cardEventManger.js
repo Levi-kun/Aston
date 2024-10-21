@@ -53,7 +53,7 @@ async function scheduleRandomJobsForServer(guild) {
 }
 
 // Function to schedule daily reset at midnight
-function scheduleDailyReset() {
+function scheduleDailyReset(client) {
 	schedule.scheduleJob("0 0 * * *", async () => {
 		client.guilds.cache.forEach(async (guild) => {
 			await scheduleRandomJobsForServer(guild);
@@ -85,6 +85,6 @@ module.exports = {
 			scheduleRandomJobsForServer(guild);
 		});
 
-		scheduleDailyReset();
+		scheduleDailyReset(client);
 	},
 };
