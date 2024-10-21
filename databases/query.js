@@ -98,6 +98,10 @@ class Query {
 		try {
 			await this.validateData(data); // Validate data before inserting
 			const result = await this.collection.insertOne(data);
+
+			if(result.acknowledged === true) {
+				this.readOne({_id: result.insertedId});
+			}
 			return result;
 		} finally {
 			await this.disconnect(); // Ensure disconnect

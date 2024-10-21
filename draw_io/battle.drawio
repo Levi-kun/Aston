@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="JmBZI9c73Gt2OLMM4qta" name="Page-1">
-        <mxGraphModel dx="773" dy="847" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="899" dy="618" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -103,7 +103,7 @@
                     <mxGeometry x="290" y="630" width="150" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="67" value="Game Loop" style="swimlane;whiteSpace=wrap;html=1;rounded=1;shadow=0;glass=0;sketch=0;strokeColor=default;fontSize=12;fontColor=#F7FFFF;" parent="1" vertex="1">
-                    <mxGeometry x="300" y="750" width="360" height="630" as="geometry"/>
+                    <mxGeometry x="300" y="750" width="340" height="630" as="geometry"/>
                 </mxCell>
                 <mxCell id="76" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=20;fontColor=#F7FFFF;" parent="67" source="70" target="72" edge="1">
                     <mxGeometry relative="1" as="geometry"/>

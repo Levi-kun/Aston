@@ -43,6 +43,25 @@ class Card {
 		for (let i = 0; i < this.move_ids.length; i++) {
 			let values = moveQuery.findOne({ _id: this.move_ids[i] });
 			this.move_sets[move_ids[i]] = values;
+
+			// proxy
+
+			return new Proxy(this, {
+				set: async (target, prop, value) => {
+					target[prop] = value;
+
+					try {
+						await ownedCardsQuery.updateOne(
+							{ _id: target._id }, // Find card by its ID
+							{ $set: { prop: value } } // Update the changed property
+						);
+					} catch (error) {
+						console.error("Error updating card:", error);
+					}
+
+					return true;
+				},
+			});
 		}
 	}
 	static async createNewCard(args) {
