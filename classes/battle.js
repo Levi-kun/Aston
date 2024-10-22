@@ -6,10 +6,7 @@ const {
 	ButtonStyle,
 	EmbedBuilder,
 } = require("discord.js");
-const { ObjectId } = require("mongodb");
-const { Query } = require("../databases/query.js"); // Adjust the path accordingly
-const bot = require("../client.js");
-const eventEmitter = require("../src/eventManager");
+const { Query } = require("../databases/query.js");
 const { Card } = require("./cardManager.js");
 const BattleStatus = Object.freeze({
 	PENDING: "pending",
@@ -63,7 +60,7 @@ class Battle {
 				// Avoid updating database if the property starts with "_"
 				if (!prop.startsWith("_")) {
 					try {
-						await pvpBattlesQuery.updateOne(
+						await this._pvpBattlesQuery.updateOne(
 							{ _id: target._id }, // Find battle by ID
 							{ $set: { [prop]: value } } // Update the changed property
 						);
@@ -78,12 +75,12 @@ class Battle {
 	}
 
 	// Lock a property to make it local only
-	lockProperty(prop) {
+	_lockProperty(prop) {
 		this._localOnly.add(prop);
 	}
 
 	// Unlock a property so it can trigger database updates
-	unlockProperty(prop) {
+	_unlockProperty(prop) {
 		this._localOnly.delete(prop);
 	}
 
@@ -95,15 +92,17 @@ class Battle {
 		state = BattleStatus.PENDING
 	) {
 		try {
-			// Check if battle already exists
-			const existingBattle = await pvpBattlesQuery.findOne({
+			const data = {
 				$or: [
-					{ challenged_id: challenger_id },
+					{ challenged_id: challenged_id },
 					{ challenger_id: challenger_id },
 				],
 				guild_id: guild_id,
-			});
+			};
 
+			const pvpBattlesQuery = new Query("pvpBattles");
+			// Check if battle already exists
+			const existingBattle = await pvpBattlesQuery.readOne(data);
 			if (Object.keys(existingBattle).length > 0) {
 				// Return an existing battle instance
 				return new Battle(existingBattle);
@@ -120,7 +119,7 @@ class Battle {
 				created_at: new Date(),
 			};
 
-			const result = await pvpBattlesQuery.insertOne(newBattleData);
+			const result = await this._pvpBattles.insertOne(newBattleData);
 			return new Battle(result);
 		} catch (error) {
 			console.error("Error creating battle instance:", error);
@@ -144,32 +143,23 @@ class Battle {
 		}
 	}
 
-	async giveChoicetoUser(channel) {
+	async updateStatus(status) {
+		if (status in battleStatus) {
+			this._unlockProperty(status);
+			this.status = status;
+			this._lockProperty(status);
+		}
+	}
 
-		const row = new ActionRowBuilder().addComponents(
-			new ButtonBuilder()
-				.setCustomId(`choose_first_${this.battleId}_1`) // 1 for first
-				.setLabel(`Go First`)
-				.setStyle(ButtonStyle.Success),
-			new ButtonBuilder()
-				.setCustomId(`choose_first_${this.battleId}_2`) // 2 for second
-				.setLabel(`Go Second`)
-				.setStyle(ButtonStyle.Primary)
-		);
+	async cancelBattle() {
+		this.updateStatus(BattleStatus.DENIED);
 
-		 const embed = new EmbedBuilder()
-				.setTitle("Choose Turn Order")
-				.setDescription(
-					`${player.user.username}, would you like to go **first** or **second**?`
-				)
-				.setColor("#3498DB");
-
-		await channel.send({ embeds: [embed], components: [row] });
+		this.delete();
 	}
 
 	async startBattle() {
 		this.status = BattleStatus.ON_GOING;
-		this.lockProperty("status");
+		this.lockProperty(status);
 
 		while (this.status === BattleStatus.ON_GOING) {}
 	}
@@ -182,6 +172,6 @@ class Battle {
 		this.current_turn = candidate;
 		return candidate;
 	}
-
-
 }
+
+module.exports = { Battle, BattleStatus, moveTypes };

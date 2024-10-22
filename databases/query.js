@@ -99,8 +99,8 @@ class Query {
 			await this.validateData(data); // Validate data before inserting
 			const result = await this.collection.insertOne(data);
 
-			if(result.acknowledged === true) {
-				this.readOne({_id: result.insertedId});
+			if (result.acknowledged === true) {
+				this.readOne({ _id: result.insertedId });
 			}
 			return result;
 		} finally {
