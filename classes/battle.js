@@ -95,7 +95,7 @@ class Battle {
 			const data = {
 				$or: [
 					{ challenged_id: challenged_id },
-					{ challenger_id: challenger_id },
+					{ challenger_id: challenged_id },
 				],
 				guild_id: guild_id,
 			};
