@@ -2,6 +2,7 @@ const {
 	SlashCommandBuilder,
 	ButtonBuilder,
 	ButtonStyle,
+	ComponentType,
 	ActionRowBuilder,
 	EmbedBuilder,
 } = require("discord.js");
@@ -48,46 +49,55 @@ module.exports = {
 			const acceptEmbed = new EmbedBuilder()
 				.setTitle("Battle Request")
 				.setDescription(
-					`Boss, ${challenger.username} wants to challenge you to a PvP battle. \nDo you accept? Click on the button below to confirm.`
+					`Boss, ${challenger.username} wants to challenge you to a PvP battle. \nDo you accept? `
 				)
-				.setFooter(
-					`Request sent by ${challenger.username} @ ${interaction.guild.name}`
-				);
+				.setFooter({
+					text: `Request sent by ${challenger.username} @ ${interaction.guild.name}`,
+				});
 
 			const buttonRow = new ActionRowBuilder().addComponents(
 				new ButtonBuilder()
 					.setCustomId("accept_battle")
 					.setEmoji("✔️")
-					.setStyle(ButtonStyle.PRIMARY),
+					.setStyle(ButtonStyle.Secondary),
 				new ButtonBuilder()
 					.setCustomId("deny_battle")
 					.setEmoji("❌")
-					.setStyle(ButtonStyle.DANGER)
+					.setStyle(ButtonStyle.Secondary)
 			);
 
-			challenged.send({
+			const message = await challenged.send({
 				embeds: [acceptEmbed],
 				components: [buttonRow],
 				fetchReply: true,
 			});
 
-			const collector = challenged.createMessageComponentCollector({
+			interaction.reply({
+				content: "Hand shake recieved...",
+				ephemeral: true,
+			});
+			const collector = message.createMessageComponentCollector({
 				componentType: ComponentType.Button,
 				time: 300000, // 5 minutes
 			});
 
 			collector.on("collect", async (i) => {
-				if (i.user.id === challenged.id) {
+				if (i.user.id !== challenged.id) {
 					throw Error(
 						"Lebron James! WTF!? (someone else clicked the button in a dm...)"
 					);
 				}
 
 				if (i.customId === "accept_battle") {
+					await interaction.followUp(
+						"Boss, they accepted the challenge."
+					);
 					await battle.startBattle();
 				} else if (i.customId === "deny_battle") {
 					await battle.cancelBattle();
-					await interaction.reply("Boss, they denied the challenge.");
+					await interaction.followUp(
+						"Boss, they denied the challenge."
+					);
 					return;
 				}
 			});

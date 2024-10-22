@@ -8,11 +8,13 @@ const {
 } = require("discord.js");
 const { Query } = require("../databases/query.js");
 const { Card } = require("./cardManager.js");
+
 const BattleStatus = Object.freeze({
 	PENDING: "pending",
 	DENIED: "denied",
 	ON_GOING: "on_going",
 	FINISHED: "finished",
+	FORFEIT: "forfeit",
 });
 
 const moveTypes = Object.freeze({
@@ -25,9 +27,12 @@ const moveTypes = Object.freeze({
 });
 
 class Battle {
+	// Move static properties outside the constructor
+	static _pvpBattlesQuery = new Query("pvpBattles");
+
 	constructor(battleData) {
 		// ID information
-		this._id = battleData._id; // The _id of the battle from the database
+		this._id = battleData._id;
 		this.guild_id = battleData.guild_id;
 
 		this.challenger_id = battleData.challenger_id;
@@ -40,57 +45,63 @@ class Battle {
 		this.created_at = battleData.created_at || new Date();
 		this.current_turn = battleData.current_turn || null;
 
-		this._localOnly = new Set(); // Locked properties that shouldn't trigger DB updates
-		this._previousState = {}; // Track previous state to avoid redundant updates
+		this._localOnly = new Set();
+		this._previousState = {};
 
-		this._currentmessage = ""; // Message associated with the battle
-		this._messageHistory = []; // History of messages for debugging
+		this._currentmessage = "";
+		this._messageHistory = [];
 
 		return new Proxy(this, {
 			set: async (target, prop, value) => {
-				// Skip properties that are locked or unchanged
 				if (this._localOnly.has(prop) || target[prop] === value) {
 					target[prop] = value;
 					return true;
 				}
-
-				// Update the property
 				target[prop] = value;
-
-				// Avoid updating database if the property starts with "_"
 				if (!prop.startsWith("_")) {
 					try {
-						await this._pvpBattlesQuery.updateOne(
-							{ _id: target._id }, // Find battle by ID
-							{ $set: { [prop]: value } } // Update the changed property
+						await Battle._pvpBattlesQuery.updateOne(
+							{ _id: this._id },
+							{ $set: { [prop]: value } }
 						);
 					} catch (error) {
 						console.error("Error updating battle:", error);
 					}
 				}
-
 				return true;
 			},
 		});
 	}
 
-	// Lock a property to make it local only
 	_lockProperty(prop) {
 		this._localOnly.add(prop);
 	}
 
-	// Unlock a property so it can trigger database updates
 	_unlockProperty(prop) {
 		this._localOnly.delete(prop);
 	}
 
-	// Static method to create a new battle instance
 	static async createBattle(
 		guild_id,
 		challenger_id,
 		challenged_id,
 		state = BattleStatus.PENDING
 	) {
+		if (state === BattleStatus.FORFEIT) {
+			const data = {
+				$or: [
+					{ challenged_id: challenged_id },
+					{ challenger_id: challenged_id },
+				],
+				guild_id: guild_id,
+			};
+			const existingBattle = await Battle._pvpBattlesQuery.checkOne(data);
+			if (existingBattle) {
+				const existingData = Battle._pvpBattlesQuery.readOne(data);
+				return new Battle(existingData);
+			}
+			return "No forfeit battle found.";
+		}
 		try {
 			const data = {
 				$or: [
@@ -100,26 +111,22 @@ class Battle {
 				guild_id: guild_id,
 			};
 
-			const pvpBattlesQuery = new Query("pvpBattles");
-			// Check if battle already exists
-			const existingBattle = await pvpBattlesQuery.readOne(data);
-			if (Object.keys(existingBattle).length > 0) {
-				// Return an existing battle instance
+			const existingBattle = await Battle._pvpBattlesQuery.readOne(data);
+			if (existingBattle && Object.keys(existingBattle).length > 0) {
 				return new Battle(existingBattle);
 			}
 
-			// Create a new battle document in the database
 			const newBattleData = {
 				challenger_id: challenger_id,
 				challenged_id: challenged_id,
 				guild_id: guild_id,
-				challenger_cards: [],
-				challenged_cards: [],
 				status: state,
 				created_at: new Date(),
 			};
 
-			const result = await this._pvpBattles.insertOne(newBattleData);
+			const result = await Battle._pvpBattlesQuery.insertOne(
+				newBattleData
+			);
 			return new Battle(result);
 		} catch (error) {
 			console.error("Error creating battle instance:", error);
@@ -138,13 +145,13 @@ class Battle {
 				guild_id
 			);
 		} catch (error) {
-			console.error("Error fetching challenger's cards:", error);
+			console.error("Error fetching cards:", error);
 			return;
 		}
 	}
 
 	async updateStatus(status) {
-		if (status in battleStatus) {
+		if (status in BattleStatus) {
 			this._unlockProperty(status);
 			this.status = status;
 			this._lockProperty(status);
@@ -152,23 +159,32 @@ class Battle {
 	}
 
 	async cancelBattle() {
-		this.updateStatus(BattleStatus.DENIED);
-
-		this.delete();
+		await this.updateStatus(BattleStatus.DENIED);
+		await this.delete(); // Assuming there's a delete function not shown here
 	}
 
+	/**
+	 * Starts the battle and sets the status to ON_GOING.
+	 * This function locks the status property to prevent unauthorized updates.
+	 * It then enters a loop where the actual battle logic is implemented.
+	 *
+	 * @returns {Promise<void>} A Promise that resolves when the battle is finished.
+	 */
 	async startBattle() {
-		this.status = BattleStatus.ON_GOING;
-		this.lockProperty(status);
-
-		while (this.status === BattleStatus.ON_GOING) {}
+		this.updateStatus(BattleStatus.ON_GOING);
+		while (this.status === BattleStatus.ON_GOING) {
+			// Battle logic goes here
+		}
 	}
 
-	chooseWhoChooseFirst() {
+	/**
+	 * Chooses a player to go first in the battle.
+	 *
+	 * @returns {string} The ID of the player who goes first.
+	 */
+	chooseWhoGoesFirst() {
 		const candidate =
-			Math.random() > 0.5
-				? this.battleData.challenger_id
-				: this.battleData.challenged_id;
+			Math.random() > 0.5 ? this.challenger_id : this.challenged_id;
 		this.current_turn = candidate;
 		return candidate;
 	}
