@@ -11,23 +11,6 @@ const eventEmitter = require("../src/eventManager");
 const { ObjectId } = require("mongodb");
 const version = 1; // version header
 
-function capitalizeFirstLetter(str) {
-	return str
-		.split(" ")
-		.map((word) => {
-			for (let i = 0; i < word.length; i++) {
-				if (/[a-zA-Z]/.test(word.charAt(i))) {
-					return (
-						word.slice(0, i) +
-						word.charAt(i).toUpperCase() +
-						word.slice(i + 1)
-					);
-				}
-			}
-			return word; // If no alphabetical characters, return the word as is
-		})
-		.join(" ");
-}
 
 /**
  * This function chooses a random rank from the given rarity object.
@@ -48,161 +31,11 @@ function chooseRank(rarity) {
 	}
 }
 
-function getCardMove(p) {
-	if (!p.isCard === true) {
-		p.isCard = false;
-	}
-	const data = { parent: { id: p.id, isCard: p.bool } };
-	const moveQuery = new Query("animeCardMoves");
-	const move = moveQuery.aggregate(1, data);
-	console.log("Card Move:", move);
-	if (Object.keys(move).length === 0)
-		throw new Error("Card Move Error: No move found for card.");
-	return move;
-}
 
-// Helper function
-function getRandomMultiplier(min, max) {
-	return min + Math.random() * (max - min);
-}
+async function addToPlayer(user, guild, card) {
 
-async function grabCardMoves(card) {
-	const query = new Query("animeCardMoves");
+	card.addOwner(user.id);
 
-	// Helper function to get a move from the 'Basic' category
-	async function getDefaultMove() {
-		const basicMove = await getCardMove({ id: "Basic" });
-		if (!basicMove) {
-			throw new Error("No default move found for 'Basic' category.");
-		}
-		return basicMove;
-	}
-
-	try {
-		// 1. Get the move directly tied to the card (parent.id === card.name)
-		let tiedMove = await getCardMove({ id: card.name }); // Use card name instead of ObjectId
-
-		// If no tied move is found, use the default move
-		if (!tiedMove) {
-			console.warn(
-				`No tied move found for card: ${card.name}, using default 'Basic' move.`
-			);
-			tiedMove = await getDefaultMove();
-		}
-
-		// 2. Shuffle the card's categories to ensure randomness
-		let categories = [...card.categories]; // Clone the categories array
-		categories = categories.sort(() => 0.5 - Math.random()); // Randomize the array
-		const selectedMoves = new Set();
-		selectedMoves.add(tiedMove.name); // Ensure the tied move is in the set
-
-		// 3. Get moves tied to the first randomly selected category
-		let firstCategoryMoves;
-		try {
-			firstCategoryMoves = await query.readMany({
-				"parent.id": categories[0],
-			}); // Use category name instead of ObjectId
-		} catch (err) {
-			console.warn(
-				`No moves found for category: ${categories[0]}, using default 'Basic' move.`
-			);
-			firstCategoryMoves = [await getDefaultMove()];
-		}
-
-		// Filter out any moves that are already selected to prevent duplicates
-		const uniqueFirstCategoryMoves = firstCategoryMoves.filter(
-			(move) => !selectedMoves.has(move.name)
-		);
-
-		// Randomly select one unique move from the first category
-		const firstCategoryMove =
-			uniqueFirstCategoryMoves[
-				Math.floor(Math.random() * uniqueFirstCategoryMoves.length)
-			];
-		selectedMoves.add(firstCategoryMove.name); // Add it to the set of selected moves
-
-		// 4. Reset categories and get moves tied to a different randomly selected category
-		const secondCategory =
-			categories.length > 1 ? categories[1] : categories[0]; // Choose a second category
-		let secondCategoryMoves;
-		try {
-			secondCategoryMoves = await query.readMany({
-				"parent.id": secondCategory,
-			}); // Use category name instead of ObjectId
-		} catch (err) {
-			console.warn(
-				`No moves found for category: ${secondCategory}, using default 'Basic' move.`
-			);
-			secondCategoryMoves = [await getDefaultMove()];
-		}
-
-		// Filter out any moves that are already selected to prevent duplicates
-		const uniqueSecondCategoryMoves = secondCategoryMoves.filter(
-			(move) => !selectedMoves.has(move.name)
-		);
-
-		// Randomly select one unique move from the second category
-		const secondCategoryMove =
-			uniqueSecondCategoryMoves[
-				Math.floor(Math.random() * uniqueSecondCategoryMoves.length)
-			];
-		selectedMoves.add(secondCategoryMove.name); // Add it to the set of selected moves
-
-		// 5. Return the final array of 3 unique moves (one tied to the card, two tied to random categories or 'Basic')
-		const moves = [tiedMove, firstCategoryMove, secondCategoryMove];
-		return moves;
-	} catch (err) {
-		console.error(`Error in grabCardMoves: ${err.message}`);
-		throw err;
-	}
-}
-
-function powerSpawner(value, power) {
-	if (value >= 4) {
-		power = Math.floor(power * getRandomMultiplier(0.9, 1.111));
-		return power;
-	} else {
-		power = Math.floor(
-			power *
-				getRandomMultiplier(
-					getRandomMultiplier(0.5, 0.899),
-					getRandomMultiplier(1, getRandomMultiplier(1.1, 1.4599))
-				)
-		);
-		return power;
-	}
-}
-
-async function addToPlayer(user, card, guild, power) {
-	const query = new Query("ownedCards");
-	const listQuery = new Query("animeCardList");
-	try {
-		const moveIds = await grabCardMoves(card).then((moves) =>
-			moves.map((move) => move._id)
-		);
-		const rowQuery = {
-			vr: version,
-			rank: card.rarity,
-			player_id: user.id,
-			guild_id: guild.id,
-			realPower: power,
-			move_ids: moveIds,
-			card_id: new ObjectId(card._id),
-			inGroup: false, // or set it based on your logic
-		};
-		console.log(rowQuery);
-		const rowData = await query.insertOne(rowQuery);
-		if (query.checkOne(rowQuery)) {
-			listQuery.updateOne(
-				{ _id: new ObjectId(card._id) },
-				{ $inc: { owned: 1 } }
-			);
-		}
-		return rowData;
-	} catch (err) {
-		console.error(`Error inserting into ownedCards: ${err.message}`);
-		throw err;
-	}
 }
 
 /**
@@ -217,7 +50,7 @@ async function addToPlayer(user, card, guild, power) {
  * @returns {Promise<import('discord.js').Message>} - The sent message.
  */
 
-async function messageCreater(image, card, defaultChannel, guild, power) {
+async function messageCreater(image, card, defaultChannel, guild) {
 	try {
 		const claimButton = new ButtonBuilder()
 			.setCustomId("Claim")
@@ -229,7 +62,7 @@ async function messageCreater(image, card, defaultChannel, guild, power) {
 			.setImage(`${image}`)
 			.setDescription(`${capitalizeFirstLetter(card.name)}`)
 			.addFields(
-				{ name: "Value", value: `${power}` }, // Display the spawned power here
+				{ name: "Value", value: `${card.realPower}` }, // Display the spawned power here
 				{
 					name: "Rarity",
 					value: `${card.getRarity()}`,
@@ -255,7 +88,7 @@ async function messageCreater(image, card, defaultChannel, guild, power) {
 			if (i.customId === "Claim") {
 				await message.delete();
 				try {
-					await addToPlayer(i.user, card, guild, power);
+					await addToPlayer(i.user, guild, card);
 					await message.channel.send(
 						`${i.user.username}, congrats on obtaining: ${card.Name}`
 					);
@@ -305,13 +138,8 @@ module.exports = {
 			// Extract the first card from the results
 			card = card[0].lv;
 			console.log(1, card);
-			a = new Card(card);
-
+			a = new Card(card).convertToOwnedCard(guild.id);
 			console.log(2, a);
-			// Spawn the power for the card
-			const power =
-				Math.round(powerSpawner(card.rarity, card.power) / 50) * 50; // Call powerSpawner with appropriate values
-
 			// Get the default channel ID
 			let guildData;
 			try {
@@ -354,11 +182,10 @@ module.exports = {
 				try {
 					await messageCreater(
 						image[0],
-						card,
+						a,
 						defaultChannel,
 						link[0],
-						guild,
-						power
+						guild
 					); // Pass the spawned power to the message creator
 				} catch (err) {
 					console.error(`Error in messageCreater: ${err.message}`);
