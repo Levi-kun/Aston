@@ -8,11 +8,9 @@ const animemovesListSchema = {
 			"description",
 			"version",
 			"value",
-			"specialdmg",
-			"ownModifier",
+			"modifiers",
 			"parent",
 			"duration",
-			"otherModifiers",
 		],
 		additionalProperties: false, // Disallow any fields that are not explicitly defined
 		properties: {
@@ -81,7 +79,7 @@ const animemovesListSchema = {
 				},
 				description: "Modifies other cards or stats during battle",
 			},
-			requirmentForm: {
+			requirementForm: {
 				bsonType: "object",
 				description:
 					"If ability changes by a condition said new ability is nested here",
@@ -89,9 +87,9 @@ const animemovesListSchema = {
 					name: {
 						bsonType: "string",
 					},
-					requirment: {
+					requirement: {
 						bsonType: "object",
-						description: "requirment",
+						description: "requirement",
 						properties: {
 							type: { bsonType: "string" },
 							value: { bsonType: "int" },

@@ -32,75 +32,12 @@ const userDataBase = {
 				description: "current claims he can do",
 			},
 			wins: {
-				bsonType: "array",
-				description: "List of wins with associated game IDs",
-				items: {
-					bsonType: "object",
-					required: ["_id", "gameId"],
-					properties: {
-						_id: {
-							bsonType: "objectId",
-							description: "Unique identifier for the win",
-						},
-						gameId: {
-							bsonType: "string",
-							description: "Identifier of the game they won",
-						},
-						date: {
-							bsonType: "date",
-							description: "Date when the game was won",
-						},
-					},
-				},
+				bsonType: "int",
+				description: "How many times the won",
 			},
 			loses: {
-				bsonType: "array",
+				bsonType: "int",
 				description: "List of loses with associated game IDs",
-				items: {
-					bsonType: "object",
-					required: ["_id", "gameId"],
-					properties: {
-						_id: {
-							bsonType: "objectId",
-							description: "Unique identifier for the win",
-						},
-						gameId: {
-							bsonType: "string",
-							description: "Identifier of the game they won",
-						},
-						date: {
-							bsonType: "date",
-							description: "Date when the game was won",
-						},
-					},
-				},
-			},
-			afk_Message: {
-				bsonType: "string",
-				description: "afk message",
-			},
-			events: {
-				bsonType: "array",
-				description: "events joined",
-				items: {
-					bsonType: "object",
-					required: ["_id", "eventId", "status"],
-					properties: {
-						_id: {
-							bsonType: "objectId",
-							description: "id player instance of event",
-						},
-						eventId: {
-							bsonType: "string",
-							description: "id of event",
-						},
-						status: {
-							bsonType: "string",
-							description:
-								"status of event, i.e. upcoming, delayed, canceled, ongoing, ended",
-						},
-					},
-				},
 			},
 			location: {
 				bsonType: "string",

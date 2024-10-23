@@ -102,6 +102,22 @@ class Battle {
 			}
 			return "No forfeit battle found.";
 		}
+		if (state === "start") {
+			const data = {
+				$or: [
+					{ challenged_id: challenged_id },
+					{ challenger_id: challenged_id },
+				],
+				guild_id: guild_id,
+			};
+			const existingBattle = await Battle._pvpBattlesQuery.readOne(data);
+			if (existingBattle && Object.keys(existingBattle).length > 0) {
+				return "You already issued a challenge to this user.";
+			}
+
+			state = "pending";
+		}
+
 		try {
 			const data = {
 				$or: [
@@ -159,8 +175,36 @@ class Battle {
 	}
 
 	async cancelBattle() {
+		this._localOnly.clear();
 		await this.updateStatus(BattleStatus.DENIED);
-		await this.delete(); // Assuming there's a delete function not shown here
+	}
+
+	async forfeit(loserid) {
+		const winner_id =
+			this.challenger_id === loserid
+				? this.challenged_id
+				: this.challenger_id;
+
+		this.updateStatus(BattleStatus.FINISHED);
+		this._localOnly.clear();
+		this.winner_id = winner_id;
+		this.loser_id = loserid;
+		this.finished_at = new Date();
+
+		try {
+			userQuery = new Query("userDataBase");
+
+			userQuery.update(
+				{ id: loserid, _guildId: this.guild_id },
+				{ $set: { inc: { loses: 1 } } }
+			);
+			userQuery.update(
+				{ id: winner_id, _guildId: this.guild_id },
+				{ $set: { inc: { wins: 1 } } }
+			);
+		} catch (error) {
+			console.error("Error updating user statistics:", error);
+		}
 	}
 
 	/**

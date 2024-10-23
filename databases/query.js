@@ -163,7 +163,6 @@ class Query {
 
 		// Apply filter if provided
 		if (filter) {
-			filter = { rarity: parseInt(filter, 10) };
 			stack.push({ $match: filter });
 		}
 

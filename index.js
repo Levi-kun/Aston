@@ -12,47 +12,47 @@ const token = process.env.TOKEN;
 
 const eventsPath = path.join(__dirname, "events");
 const eventFiles = fs
-    .readdirSync(eventsPath)
-    .filter((file) => file.endsWith(".js"));
+	.readdirSync(eventsPath)
+	.filter((file) => file.endsWith(".js"));
 
 for (const file of eventFiles) {
-    const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
-    if (event.once) {
-        bot.once(event.name, (...args) => event.execute(...args));
-    } else {
-        bot.on(event.name, (...args) => event.execute(...args));
-    }
+	const filePath = path.join(eventsPath, file);
+	const event = require(filePath);
+	if (event.once) {
+		bot.once(event.name, (...args) => event.execute(...args));
+	} else {
+		bot.on(event.name, (...args) => event.execute(...args));
+	}
 }
 
 function getTimeStamp(dateObject) {
-    // current year
-    const year = dateObject.getFullYear();
+	// current year
+	const year = dateObject.getFullYear();
 
-    // current hours
-    const hours = dateObject.getHours();
+	// current hours
+	const hours = dateObject.getHours();
 
-    // current minutes
-    const minutes = dateObject.getMinutes();
-    const timestamp = Date.now();
-    // current seconds
-    const seconds = dateObject.getSeconds();
+	// current minutes
+	const minutes = dateObject.getMinutes();
+	const timestamp = Date.now();
+	// current seconds
+	const seconds = dateObject.getSeconds();
 
-    return `${year}-${hours}-${minutes}-${seconds}-${timestamp}`;
+	return `${year}-${hours}-${minutes}-${seconds}-${timestamp}`;
 }
 
 const timestamp = new Date();
 const logFile = fs.createWriteStream(
-    `./consoleLogs/${getTimeStamp(timestamp)}`,
-    { flags: "a" }
+	`./consoleLogs/${getTimeStamp(timestamp)}`,
+	{ flags: "a" }
 );
 
 // Create a console logger that writes to the file
 const logStdout = process.stdout;
 
 console.log = function () {
-    logFile.write(util.format.apply(null, arguments) + "\n");
-    logStdout.write(util.format.apply(null, arguments) + "\n");
+	logFile.write(util.format.apply(null, arguments) + "\n");
+	logStdout.write(util.format.apply(null, arguments) + "\n");
 };
 
 bot.login(token);

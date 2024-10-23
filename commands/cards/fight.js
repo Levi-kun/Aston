@@ -34,18 +34,21 @@ module.exports = {
 				"Please provide a valid user as an opponent."
 			);
 		}
-
-		if (challenger.id === challenged.id)
-			return interaction.reply("Boss, you can't challenge yourself.");
+		if (challenged.bot)
+			if (challenger.id === challenged.id)
+				return interaction.reply("Boss, you can't challenge yourself.");
 
 		const guild = interaction.guild;
 		try {
 			const battle = await Battle.createBattle(
 				guild.id,
 				challenger.id,
-				challenged.id
+				challenged.id,
+				"start"
 			);
-
+			if (battle === "You already issued a challenge to this user.") {
+				return interaction.reply(battle);
+			}
 			const acceptEmbed = new EmbedBuilder()
 				.setTitle("Battle Request")
 				.setDescription(
@@ -95,11 +98,29 @@ module.exports = {
 					await battle.startBattle();
 				} else if (i.customId === "deny_battle") {
 					await battle.cancelBattle();
-					await interaction.followUp(
-						"Boss, they denied the challenge."
-					);
+					await interaction.followUp({
+						content: "Boss, they denied the challenge.",
+						ephemeral: true,
+					});
+
+					i.reply({ content: "Good choice...", ephemeral: true });
 					return;
 				}
+
+				collector.stop();
+
+				i.reply({ content: "Good luck. Boss.", ephemeral: true });
+			});
+
+			collector.on("end", (i, reason) => {
+				console.log(battle);
+				if (reason === "time") {
+					challenged.send({
+						content: `"I'll be back." \n- Note from ${interaction.user.username}`, // Changed 'name' to 'username'
+						ephemeral: true,
+					});
+				}
+				i.delete();
 			});
 		} catch (error) {
 			console.error("Error starting battle:", error);

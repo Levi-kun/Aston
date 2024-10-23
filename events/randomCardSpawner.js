@@ -5,6 +5,8 @@ const {
 	ActionRowBuilder,
 } = require("discord.js");
 const { Query } = require("../databases/query.js");
+
+const { Card } = require("../classes/cardManager.js");
 const eventEmitter = require("../src/eventManager");
 const { ObjectId } = require("mongodb");
 const version = 1; // version header
@@ -46,6 +48,19 @@ function chooseRank(rarity) {
 	}
 }
 
+function getCardMove(p) {
+	if (!p.isCard === true) {
+		p.isCard = false;
+	}
+	const data = { parent: { id: p.id, isCard: p.bool } };
+	const moveQuery = new Query("animeCardMoves");
+	const move = moveQuery.aggregate(1, data);
+	console.log("Card Move:", move);
+	if (Object.keys(move).length === 0)
+		throw new Error("Card Move Error: No move found for card.");
+	return move;
+}
+
 // Helper function
 function getRandomMultiplier(min, max) {
 	return min + Math.random() * (max - min);
@@ -56,7 +71,7 @@ async function grabCardMoves(card) {
 
 	// Helper function to get a move from the 'Basic' category
 	async function getDefaultMove() {
-		const basicMove = await query.readOne({ "parent.id": "Basic" });
+		const basicMove = await getCardMove({ id: "Basic" });
 		if (!basicMove) {
 			throw new Error("No default move found for 'Basic' category.");
 		}
@@ -65,7 +80,7 @@ async function grabCardMoves(card) {
 
 	try {
 		// 1. Get the move directly tied to the card (parent.id === card.name)
-		let tiedMove = await query.readOne({ "parent.id": card.name }); // Use card name instead of ObjectId
+		let tiedMove = await getCardMove({ id: card.name }); // Use card name instead of ObjectId
 
 		// If no tied move is found, use the default move
 		if (!tiedMove) {
@@ -142,20 +157,6 @@ async function grabCardMoves(card) {
 	}
 }
 
-function rarityDesignater(rarity) {
-	let value = "C";
-	if (rarity <= 2) {
-		value = "B";
-	} else if (rarity <= 3) {
-		value = "A";
-	} else if (rarity <= 4) {
-		value = "S";
-	} else if (rarity <= 5) {
-		value = "S+";
-	}
-	return value;
-}
-
 function powerSpawner(value, power) {
 	if (value >= 4) {
 		power = Math.floor(power * getRandomMultiplier(0.9, 1.111));
@@ -204,6 +205,18 @@ async function addToPlayer(user, card, guild, power) {
 	}
 }
 
+/**
+ * Creates and sends a message with an image, card details, and a claim button to the default channel.
+ *
+ * @param {string} image - The URL or attachment of the card image.
+ * @param {Object} card - The card object containing details like name, rarity, and power.
+ * @param {import('discord.js').TextChannel} defaultChannel - The default channel where the message will be sent.
+ * @param {import('discord.js').Guild} guild - The guild where the message will be sent.
+ * @param {number} power - The spawned power for the card.
+ *
+ * @returns {Promise<import('discord.js').Message>} - The sent message.
+ */
+
 async function messageCreater(image, card, defaultChannel, guild, power) {
 	try {
 		const claimButton = new ButtonBuilder()
@@ -219,7 +232,7 @@ async function messageCreater(image, card, defaultChannel, guild, power) {
 				{ name: "Value", value: `${power}` }, // Display the spawned power here
 				{
 					name: "Rarity",
-					value: `${rarityDesignater(card.rarity)}`,
+					value: `${card.getRarity()}`,
 					inline: true,
 				}
 			);
@@ -280,7 +293,9 @@ module.exports = {
 			const cardType = chooseRank(rarity_Settings.rarity_Settings);
 
 			// Aggregate the card
-			let card = await query.aggregate(1, cardType);
+			let card = await query.aggregate(1, {
+				rarity: parseInt(cardType, 10),
+			});
 
 			if (!card || card.length === 0) {
 				console.error("Card not found");
@@ -289,7 +304,10 @@ module.exports = {
 
 			// Extract the first card from the results
 			card = card[0].lv;
-			console.log(card.name);
+			console.log(1, card);
+			a = new Card(card);
+
+			console.log(2, a);
 			// Spawn the power for the card
 			const power =
 				Math.round(powerSpawner(card.rarity, card.power) / 50) * 50; // Call powerSpawner with appropriate values

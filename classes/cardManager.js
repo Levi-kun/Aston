@@ -35,9 +35,10 @@ class Card {
 		this.owner = data.player_id;
 		this.categories = data.categories;
 		this.createdAt = data.created_At;
-		this.move_ids = data.move_ids;
 		this.card_id = data.card_id;
 		this.default = data.inGroup;
+
+		this._cloneCard = false;
 
 		this.move_sets = {};
 		for (let i = 0; i < this.move_ids.length; i++) {
@@ -49,6 +50,9 @@ class Card {
 			return new Proxy(this, {
 				set: async (target, prop, value) => {
 					target[prop] = value;
+					if (prop.startsWith("_")) return;
+
+					if ((this._cloneCard = true)) return;
 
 					try {
 						await ownedCardsQuery.updateOne(
@@ -233,14 +237,14 @@ class Card {
 	 * Returns the rarity designation based on the card's rank.
 	 * @returns {string} - The rarity designation.
 	 */
-	getRarity() {
-		if (this.Rank <= 2) {
+	async getRarity() {
+		if (this.rank <= 2) {
 			return "B";
-		} else if (this.Rank <= 3) {
+		} else if (this.rank <= 3) {
 			return "A";
-		} else if (this.Rank <= 4) {
+		} else if (this.rank <= 4) {
 			return "S";
-		} else if (this.Rank <= 5) {
+		} else if (this.rank <= 5) {
 			return "S+";
 		} else {
 			return "C";
@@ -248,8 +252,17 @@ class Card {
 	}
 
 	async cloneCard() {
-		return new card(this);
+		const clone = new card(this);
+		clone._cloneCard = true;
+		return clone;
 	}
+
+	async pvpMode() {
+		const pvp = this.cloneCard();
+		pvp.health = this.power;
+		return this.cloneCard;
+	}
+	
 	// Additional methods related to Card can be added here.
 }
 
