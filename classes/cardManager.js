@@ -196,18 +196,18 @@ chooseRanks() {
  * This class allows modifications to the ownedCards MongoDB collection.
  */
 class OwnedCard extends Card {
-	constructor(data) {
+	constructor() {
 
-		this.realPower = data.realPower;
-		this.rank = data.rank;
-		this.guild_id = data.guild_id;
-		this.owner = data.player_id;
-		this.createdAt = data.created_At;
-		this.card_id = data.card_id;
-		this.inGroup = data.inGroup;
-		this._cloneCard = false;
-		this.move_ids = data.move_ids || [];
-		this._move_sets = {};
+		this.realPower;
+		this.rank;
+		this.guild_id;
+		this.owner;
+		this.createdAt;
+		this.card_id;
+		this.inGroup;
+		this._cloneCard;
+		this.move_ids;
+		this._move_sets;
 
 	    // Initialize move sets for the cardp
 9
@@ -217,9 +217,7 @@ class OwnedCard extends Card {
 				console.log(`Setting ${prop} to ${value}`);
 				if (prop.startsWith("_")) return;
 
-				// Only update the database if not a clone
-				if(this.owner) {
-				if (!this._cloneCard) {
+				if (!this._cloneCard && this.owner) {
 					try {
 						await ownedCardsQuery.updateOne(
 							{ _id: target._id }, // Find card by its ID
@@ -231,8 +229,13 @@ class OwnedCard extends Card {
 					}
 				}
 				
-			}
+				if(prop === "owner") {
+					this.createOwnedCardDocument();
+				}
+			
 				return true;
+
+				
 			},
 		});
 	}
@@ -325,6 +328,35 @@ class OwnedCard extends Card {
 			throw error;
 		}
 	}
+async createOwnedCardDocument(data) {
+    // Ensure all required fields exist in data
+    const requiredFields = ownedCardsSchema.schema.required;
+
+    requiredFields.forEach((field) => {
+        if (!(field in data)) {
+            throw new Error(`Missing required field: ${field}`);
+        }
+    });
+
+    // Build the document object
+    const ownedCardDocument = {
+        _id: new ObjectId(),
+        guild_id: this.guild_id,
+        vr: data.vr || 0, // Default value for vr
+        created_At: this.created_At || new Date(),
+        updated_At: this.updated_At || new Date(),
+        rank: this.rank,
+        card_id: new ObjectId(this.card_id),
+        player_id: this.player_id,
+        realPower: this.realPower,
+        move_ids: this.move_ids || [], // Default to empty array if not provided
+        inGroup: this.inGroup || false,
+    };
+
+    return ownedCardDocument;
+}
+
+// Example usage
 
 	/**
 	 * Fetch move sets for the owned card and update the move_sets property.
