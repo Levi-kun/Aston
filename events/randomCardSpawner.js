@@ -11,7 +11,6 @@ const eventEmitter = require("../src/eventManager");
 const { ObjectId } = require("mongodb");
 const version = 1; // version header
 
-
 /**
  * This function chooses a random rank from the given rarity object.
  * @param {Object} rarity - An object containing keys as category names and values as weights for each category.
@@ -31,11 +30,8 @@ function chooseRank(rarity) {
 	}
 }
 
-
 async function addToPlayer(user, guild, card) {
-
 	card.addOwner(user.id);
-
 }
 
 /**
@@ -138,7 +134,7 @@ module.exports = {
 			// Extract the first card from the results
 			card = card[0].lv;
 			console.log(1, card);
-			a = new Card(card).convertToOwnedCard(guild.id);
+			a = await new Card(card).convertToOwnedCard(guild.id);
 			console.log(2, a);
 			// Get the default channel ID
 			let guildData;

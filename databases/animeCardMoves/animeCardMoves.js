@@ -7,7 +7,6 @@ const animemovesListSchema = {
 			"_id",
 			"description",
 			"version",
-			"value",
 			"modifiers",
 			"parent",
 			"duration",
@@ -48,10 +47,6 @@ const animemovesListSchema = {
 				bsonType: "int",
 				description: "Version of the move",
 			},
-			value: {
-				bsonType: "int",
-				description: "Base power value of the move",
-			},
 			duration: {
 				bsonType: "int",
 				description: "Duration of the move effect in turns",
@@ -71,9 +66,15 @@ const animemovesListSchema = {
 							description:
 								"The attribute (e.g., health, power, that move affects)",
 						},
-						value: {
+						flat: {
 							bsonType: "int",
-							description: "The value of the modifier",
+							description:
+								"The value of the modifier as a flat value",
+						},
+						percentage: {
+							bsonType: "int",
+							description:
+								"The value of the modifier as a percentage",
 						},
 					},
 				},
@@ -126,10 +127,15 @@ const animemovesListSchema = {
 											description:
 												"The attribute (e.g., health, power, that move affects)",
 										},
-										value: {
+										flat: {
 											bsonType: "int",
 											description:
-												"The value of the modifier",
+												"The value of the modifier as a flat value",
+										},
+										percentage: {
+											bsonType: "int",
+											description:
+												"The value of the modifier as a percentage",
 										},
 									},
 								},

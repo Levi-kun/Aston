@@ -7,7 +7,6 @@ const ownedMovesSchema = {
 			"_id",
 			"description",
 			"version",
-			"value",
 			"modifiers",
 			"duration",
 			"card_id",
@@ -32,10 +31,6 @@ const ownedMovesSchema = {
 			version: {
 				bsonType: "int",
 				description: "Version of the move",
-			},
-			value: {
-				bsonType: "int",
-				description: "Base power value of the move",
 			},
 			duration: {
 				bsonType: "int",

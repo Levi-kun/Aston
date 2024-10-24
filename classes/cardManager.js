@@ -20,7 +20,7 @@ const moveTypes = Object.freeze({
  * Card class represents a basic card from the animeCardList collection.
  * This class should not alter the animeCardList MongoDB collection.
  */
-class Card { 
+class Card {
 	constructor(row) {
 		this._id = row._id;
 		this.name = row.name;
@@ -36,8 +36,6 @@ class Card {
 	 * @returns {Promise<Card>} - Returns a Card object.
 	 */
 
-	
-
 	static async getCardByParam(filter) {
 		const data = await animeCardListQuery.findOne(filter);
 		if (!data.lv) {
@@ -45,160 +43,172 @@ class Card {
 		}
 		return new Card(data);
 	}
-async getRandomMove(data, i = 1) {
-		return moveQuery.aggregate(i, data)
-	}	
-	async convertToOwnedCard(
-		guildId,
-		inGroup = false
-	) {
+	async getRandomMove(data, i = 1) {
+		return moveQuery.aggregate(i, data);
+	}
+	async convertToOwnedCard(guildId, inGroup = false) {
 		const ownedCard = new OwnedCard()
-		.addGuildId(guildId)
-		.addRealPower(this.powerSpawner(this.rank, this.power))
-		.addMoveIds(this.grabCardMoves)
-		.addinGroup(inGroup)
-		.addCardId(this._id)
+			.addGuildId(guildId)
+			.addRealPower(this.powerSpawner(this.rank, this.power))
+			.addMoveIds(await this.grabCardMoves())
+			.addinGroup(inGroup)
+			.addCardId(this._id);
 
 		return ownedCard;
 	}
 
-
-async grabCardMoves() {
-	const query = new Query("animeCardMoves");
-
 	// Helper function to get a move from the 'Basic' category
-	async function basicMove() {
-			basicData = {
-				parent: { id: "Basic", isCard}
+	async basicMove() {
+		const basicData = {
+			parent: { id: "basic", isCard: false },
+		};
+		return await this.getRandomMove(basicData);
+	}
+
+	async grabCardMoves() {
+		try {
+			// 1. Get the move directly tied to the card (parent.id === card.name)
+			let tiedMove = await this.getRandomMove({
+				parent: { id: this.name.toLowerCase() },
+			}); // Use card name instead of ObjectId
+			console.log(this);
+			// If no tied move is found, use the default moves
+			if (tiedMove.length === 0) {
+				console.warn(
+					`No tied move found for card: ${this.name}, using default 'Basic' move.`
+				);
+				tiedMove = await this.basicMove();
 			}
-			return getRandomMove(basicData)
-		
-	}
-	try {
-		// 1. Get the move directly tied to the card (parent.id === card.name)
-		let tiedMove = await getRandomMove({ parent: {id: this._id}}); // Use card name instead of ObjectId
 
-		// If no tied move is found, use the default move
-		if (!tiedMove) {
-			console.warn(
-				`No tied move found for card: ${this.name}, using default 'Basic' move.`
+			// 2. Shuffle the card's categories to ensure randomness
+			let categories = [...this.categories]; // Clone the categories array
+			categories = categories.sort(() => 0.5 - Math.random()); // Randomize the array
+			const selectedMoves = new Set();
+			console.log(tiedMove);
+			selectedMoves.add(tiedMove.parent.id); // Ensure the tied move is in the set
+
+			// 3. Get moves tied to the first randomly selected category
+			let firstCategoryMoves;
+			try {
+				firstCategoryMoves = await this.getRandomMove(
+					{
+						parent: { id: categories[0].toLowerCase() },
+					},
+					3
+				); // Use category name instead of ObjectId
+
+				console.log("Got First Category Moves:", firstCategoryMoves);
+			} catch (err) {
+				console.warn(
+					`No moves found for category: ${categories[0]}, using default 'Basic' move.`
+				);
+				firstCategoryMoves = [await this.basicMove()];
+			}
+
+			// Filter out any moves that are already selected to prevent duplicates
+			const uniqueFirstCategoryMoves = firstCategoryMoves.filter(
+				(move) => !selectedMoves.has(move.parent.id)
 			);
-			tiedMove = await basicMove();
-		}
 
-		// 2. Shuffle the card's categories to ensure randomness
-		let categories = [...this.categories]; // Clone the categories array
-		categories = categories.sort(() => 0.5 - Math.random()); // Randomize the array
-		const selectedMoves = new Set();
-		selectedMoves.add(tiedMove.parent.id); // Ensure the tied move is in the set
+			// Randomly select one unique move from the first category
+			const firstCategoryMove =
+				uniqueFirstCategoryMoves[
+					Math.floor(Math.random() * uniqueFirstCategoryMoves.length)
+				];
+			selectedMoves.add(firstCategoryMove.name); // Add it to the set of selected moves
+			console.log(`Selected move: ${firstCategoryMove.name}`);
+			// 4. Reset categories and get moves tied to a different randomly selected category
+			let secondCategory =
+				categories.length > 1 ? categories[1] : categories[0]; // Choose a second category
+			secondCategory = secondCategory.toLowerCase(); // Convert to lowercase for MongoDB query
+			let secondCategoryMoves;
+			try {
+				secondCategoryMoves = await this.getRandomMove(
+					{
+						parent: { id: secondCategory },
+					},
+					3
+				); // Use category name instead of ObjectId
+			} catch (err) {
+				console.warn(
+					`No moves found for category: ${secondCategory}, using default 'Basic' move.`
+				);
+				secondCategoryMoves = [await this.basicMove()];
+			}
 
-		// 3. Get moves tied to the first randomly selected category
-		let firstCategoryMoves;
-		try {
-			firstCategoryMoves = await this.getRandomMove({
-				parent: { id: categories[0] },
-			},3); // Use category name instead of ObjectId
+			// Filter out any moves that are already selected to prevent duplicates
+			const uniqueSecondCategoryMoves = secondCategoryMoves.filter(
+				(move) => !selectedMoves.has(move.name)
+			);
+
+			// Randomly select one unique move from the second category
+			const secondCategoryMove =
+				uniqueSecondCategoryMoves[
+					Math.floor(Math.random() * uniqueSecondCategoryMoves.length)
+				];
+			selectedMoves.add(secondCategoryMove.name); // Add it to the set of selected moves
+
+			// 5. Return the final array of 3 unique moves (one tied to the card, two tied to random categories or 'Basic')
+			const moves = [tiedMove, firstCategoryMove, secondCategoryMove];
+			for (let i = 0; i < moves.length; i++) {
+				console.log(`Move ${i + 1}: ${moves[i].name}`);
+			}
+			console.log(
+				`Selected moves: ${Array.from(selectedMoves).join(", ")}`
+			);
+			return moves;
 		} catch (err) {
-			console.warn(
-				`No moves found for category: ${categories[0]}, using default 'Basic' move.`
-			);
-			firstCategoryMoves = [await basicMove()];
-		}
-
-		// Filter out any moves that are already selected to prevent duplicates
-		const uniqueFirstCategoryMoves = firstCategoryMoves.filter(
-			(move) => !selectedMoves.has(move.parent.id)
-		);
-
-		// Randomly select one unique move from the first category
-		const firstCategoryMove =
-			uniqueFirstCategoryMoves[
-				Math.floor(Math.random() * uniqueFirstCategoryMoves.length)
-			];
-		selectedMoves.add(firstCategoryMove.name); // Add it to the set of selected moves
-
-		// 4. Reset categories and get moves tied to a different randomly selected category
-		const secondCategory =
-			categories.length > 1 ? categories[1] : categories[0]; // Choose a second category
-		let secondCategoryMoves;
-		try {
-			secondCategoryMoves = await this.getRandomMove({
-				parent: {id: secondCategory},
-			},3); // Use category name instead of ObjectId
-		} catch (err) {
-			console.warn(
-				`No moves found for category: ${secondCategory}, using default 'Basic' move.`
-			);
-			secondCategoryMoves = [await basicMove()];
-		}
-
-		// Filter out any moves that are already selected to prevent duplicates
-		const uniqueSecondCategoryMoves = secondCategoryMoves.filter(
-			(move) => !selectedMoves.has(move.name)
-		);
-
-		// Randomly select one unique move from the second category
-		const secondCategoryMove =
-			uniqueSecondCategoryMoves[
-				Math.floor(Math.random() * uniqueSecondCategoryMoves.length)
-			];
-		selectedMoves.add(secondCategoryMove.name); // Add it to the set of selected moves
-
-		// 5. Return the final array of 3 unique moves (one tied to the card, two tied to random categories or 'Basic')
-		const moves = [tiedMove, firstCategoryMove, secondCategoryMove];
-		for(let i =0; i <moves.length; i++) { 
-			console.log(`Move ${i+1}: ${moves[i].name}`);
-		}
-		return moves;
-	} catch (err) {
-		console.error(`Error in grabCardMoves: ${err.message}`);
-		throw err;
-	}
-}
-chooseRanks() {
-	const rarity = this.rarity;
-	const keys = Object.keys(rarity);
-	const weights = Object.values(rarity);
-	const totalWeight = weights.reduce((acc, val) => acc + val, 0);
-	const random = Math.random() * totalWeight;
-	let cumulativeWeight = 0;
-	for (let i = 0; i < keys.length; i++) {
-		cumulativeWeight += weights[i];
-		if (random < cumulativeWeight) {
-			return keys[i]; // Convert to integer
+			console.error(`Error in grabCardMoves: ${err.message}`);
+			throw err;
 		}
 	}
+	chooseRanks() {
+		const rarity = this.rarity;
+		const keys = Object.keys(rarity);
+		const weights = Object.values(rarity);
+		const totalWeight = weights.reduce((acc, val) => acc + val, 0);
+		const random = Math.random() * totalWeight;
+		let cumulativeWeight = 0;
+		for (let i = 0; i < keys.length; i++) {
+			cumulativeWeight += weights[i];
+			if (random < cumulativeWeight) {
+				return keys[i]; // Convert to integer
+			}
+		}
 	}
- getRandomMultiplier(min, max) {
-	return min + Math.random() * (max - min);
-}
+	getRandomMultiplier(min, max) {
+		return min + Math.random() * (max - min);
+	}
+
 	powerSpawner(value, power) {
-	if (value >= 4) {
-		power = Math.floor(power * getRandomMultiplier(0.9, 1.111));
-		return power;
-	} else {
-		power = Math.floor(
-			power *
-				getRandomMultiplier(
-					getRandomMultiplier(0.5, 0.899),
-					getRandomMultiplier(1, getRandomMultiplier(1.1, 1.4599))
-				)
-		);
-		return power;
+		if (value >= 4) {
+			power = Math.floor(power * this.getRandomMultiplier(0.9, 1.111));
+			return power;
+		} else {
+			power = Math.floor(
+				power *
+					this.getRandomMultiplier(
+						this.getRandomMultiplier(0.5, 0.899),
+						this.getRandomMultiplier(
+							1,
+							this.getRandomMultiplier(1.1, 1.4599)
+						)
+					)
+			);
+			return power;
+		}
 	}
-}
 
 	// Additional methods related to card data can be added here if needed.
-} 
+}
 
 /**
  * OwnedCard class extends Card for the ownedCards collection.
  * This class allows modifications to the ownedCards MongoDB collection.
  */
-class OwnedCard extends Card {
+class OwnedCard {
 	constructor() {
-
-		this.realPower;
+		this.realPower = 0;
 		this.rank;
 		this.guild_id;
 		this.owner;
@@ -206,15 +216,15 @@ class OwnedCard extends Card {
 		this.card_id;
 		this.inGroup;
 		this._cloneCard;
-		this.move_ids;
+		this.move_ids = [];
 		this._move_sets;
 
-	    // Initialize move sets for the cardp
-9
+		// Initialize move sets for the cardp
+		9;
 		return new Proxy(this, {
 			set: async (target, prop, value) => {
 				target[prop] = value;
-				console.log(`Setting ${prop} to ${value}`);
+				console.log(`Setting Card: ${prop} to ${value}`);
 				if (prop.startsWith("_")) return;
 
 				if (!this._cloneCard && this.owner) {
@@ -228,14 +238,12 @@ class OwnedCard extends Card {
 						console.error("Error updating card:", error);
 					}
 				}
-				
-				if(prop === "owner") {
+
+				if (prop === "owner") {
 					this.createOwnedCardDocument();
 				}
-			
-				return true;
 
-				
+				return true;
 			},
 		});
 	}
@@ -244,39 +252,46 @@ class OwnedCard extends Card {
 	 * Builder Methods for the OwnedCard class can be added here.
 	 */
 
-	addRealPower(power){
+	addRealPower(power) {
 		this.realPower += power;
+		return this;
 	}
 
-	addRank(rank){
+	addRank(rank) {
 		this.rank = rank;
+		return this;
 	}
 
-	addGuildId(guildId){ 
+	addGuildId(guildId) {
 		this.guild_id = guildId;
+		return this;
 	}
 
-	addOwner(owner){
+	addOwner(owner) {
 		this.owner = owner;
+		return this;
 	}
-	addCreatedAt(createdAt){
-        this.createdAt = createdAt;
-    }
+	addCreatedAt(createdAt) {
+		this.createdAt = createdAt;
+		return this;
+	}
 
-	addCardId(cardId){
-        this.card_id = cardId;
-    }
-	addinGroup(inGroup){
-        this.inGroup = inGroup;
-    }
+	addCardId(cardId) {
+		this.card_id = cardId;
+		return this;
+	}
+	addinGroup(inGroup) {
+		this.inGroup = inGroup;
+		return this;
+	}
 
 	becomeCloneCard() {
 		this._cloneCard = true;
 	}
 
-	addMoveIds(moveIds){ 
-		this.move_ids = [...this.move_ids,...moveIds];
-        this._move_sets = {};
+	addMoveIds(moveIds) {
+		this.move_ids = [...this.move_ids, ...moveIds];
+		this._move_sets = {};
 	}
 	//
 
@@ -287,7 +302,7 @@ class OwnedCard extends Card {
 	 */
 	static async createNewCard(args) {
 		const newCardData = await ownedCardsQuery.insertOne(args);
-		return new OwnedCard(newCardData)
+		return new OwnedCard(newCardData);
 	}
 
 	/**
@@ -300,7 +315,7 @@ class OwnedCard extends Card {
 		if (!data) {
 			throw new Error("Owned card not found");
 		}
-		return new OwnedCard(data)
+		return new OwnedCard(data);
 	}
 
 	/**
@@ -328,35 +343,35 @@ class OwnedCard extends Card {
 			throw error;
 		}
 	}
-async createOwnedCardDocument(data) {
-    // Ensure all required fields exist in data
-    const requiredFields = ownedCardsSchema.schema.required;
+	async createOwnedCardDocument(data) {
+		// Ensure all required fields exist in data
+		const requiredFields = ownedCardsSchema.schema.required;
 
-    requiredFields.forEach((field) => {
-        if (!(field in data)) {
-            throw new Error(`Missing required field: ${field}`);
-        }
-    });
+		requiredFields.forEach((field) => {
+			if (!(field in data)) {
+				throw new Error(`Missing required field: ${field}`);
+			}
+		});
 
-    // Build the document object
-    const ownedCardDocument = {
-        _id: new ObjectId(),
-        guild_id: this.guild_id,
-        vr: data.vr || 0, // Default value for vr
-        created_At: this.created_At || new Date(),
-        updated_At: this.updated_At || new Date(),
-        rank: this.rank,
-        card_id: new ObjectId(this.card_id),
-        player_id: this.player_id,
-        realPower: this.realPower,
-        move_ids: this.move_ids || [], // Default to empty array if not provided
-        inGroup: this.inGroup || false,
-    };
+		// Build the document object
+		const ownedCardDocument = {
+			_id: new ObjectId(),
+			guild_id: this.guild_id,
+			vr: data.vr || 0, // Default value for vr
+			created_At: this.created_At || new Date(),
+			updated_At: this.updated_At || new Date(),
+			rank: this.rank,
+			card_id: new ObjectId(this.card_id),
+			player_id: this.player_id,
+			realPower: this.realPower,
+			move_ids: this.move_ids || [], // Default to empty array if not provided
+			inGroup: this.inGroup || false,
+		};
 
-    return ownedCardDocument;
-}
+		return ownedCardDocument;
+	}
 
-// Example usage
+	// Example usage
 
 	/**
 	 * Fetch move sets for the owned card and update the move_sets property.
@@ -365,7 +380,8 @@ async createOwnedCardDocument(data) {
 		if (this.move_ids.length) {
 			for (let i = 0; i < this.move_ids.length; i++) {
 				let moveData = await ownedMovesQuery.findOne({
-					_id: this.move_ids[i], card_id: this.card_id,
+					_id: this.move_ids[i],
+					card_id: this.card_id,
 				});
 				this.move_sets[this.move_ids[i]] = moveData;
 			}

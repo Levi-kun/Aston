@@ -152,6 +152,8 @@ class Query {
 	async aggregate(num, filter = false) {
 		await this.connect();
 
+		// Validate num parameter before executing aggregation pipeline
+		this.validateData(num);
 		// Initialize the aggregation pipeline
 		const stack = [];
 
