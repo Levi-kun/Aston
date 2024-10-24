@@ -6,7 +6,8 @@ const {
 	EmbedBuilder,
 	ComponentType,
 } = require("discord.js");
-const { Card } = require("../../classes/cardManager.js");
+const { OwnedCard, Card } = require("../../classes/cardManager.js");
+const { Query } = require("../../databases/query.js");
 
 module.exports = {
 	category: "cards",
@@ -27,13 +28,12 @@ module.exports = {
 		const cardName = interaction.options.getString("name")?.toLowerCase();
 		const user = interaction.options.getUser("user") || interaction.user;
 
+		const ownedCardsQuery = new Query("ownedCards")
+
 		try {
 			if (!cardName) {
 				// **1. Fetch All Cards Owned by the User Using Card Class**
-				const userCards = await Card.getUserCards(
-					user.id,
-					interaction.guild.id
-				);
+				const userCards = await ownedCardsQuery.aggregate({ user_id: user.id });
 
 				if (!userCards || userCards.length === 0) {
 					return interaction.reply({
@@ -158,8 +158,9 @@ module.exports = {
 				});
 			} else {
 				// **10. Existing Card Inspection Logic with Specific Card Name**
-				const card = await Card.getCardByParam({ name: cardName });
 
+				const card = user ? await ownedCardsQuery.findOne({ user_id: user.id, name: cardName  }) : await Card.getCardByParam({ name: cardName });
+				
 				if (!card) {
 					return interaction.reply({
 						content: `${user.username} does not own any cards named "${cardName}".`,
@@ -174,7 +175,7 @@ module.exports = {
 							card.rank
 						)}\n**Power:** ${card.realPower}`
 					)
-					.setImage("https://example.com/default-card-image.png");
+					.setImage(card.grabPhotosForCard());
 
 				await interaction.reply({ embeds: [embed], ephemeral: true });
 			}

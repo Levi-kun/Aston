@@ -6,6 +6,8 @@ const ownedCardsQuery = new Query("ownedCards");
 const moveQuery = new Query("animeCardMoves");
 const ownedMovesQuery = new Query("ownedMoves");
 
+const pictureQuery = new Query("animeCardPhotos");
+
 const { ObjectId } = require("mongodb");
 // Define move types as constants
 const moveTypes = Object.freeze({
@@ -63,6 +65,14 @@ class Card {
 			.addMoveSets(moveInfo);
 
 		return ownedCard;
+	}
+
+	async grabPhotosForCard() {
+		const photo = pictureQuery.findOne({ card_id: this._id });
+
+		this._photoUrl = photo.attachment;
+
+		return this._photoUrl;
 	}
 
 	// Helper function to get a move from the 'Basic' category
@@ -397,6 +407,13 @@ class OwnedCard {
 		return true;
 	}
 
+	async grabPhotosForCard() {
+		const photo = pictureQuery.findOne({card_id: this.card_id})
+
+		this._photoUrl = photo.attachment;
+
+		return this._photoUrl
+	}
 	// Example usage
 
 	/**

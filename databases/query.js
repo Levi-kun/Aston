@@ -144,6 +144,8 @@ class Query {
 		}
 	}
 
+    
+
 	/*
 	 * Requires the MongoDB Node.js Driver
 	 * https://mongodb.github.io/node-mongodb-native
@@ -156,11 +158,15 @@ class Query {
 		this.validateData(num);
 		// Initialize the aggregation pipeline
 		const stack = [];
-
+		const totalNumCondition = false
 		// Ensure num is valid
-		if (!num || typeof num !== "number" || num <= 0) {
+		if (num <= 0 && typeof num == "number") {
 			console.error("Invalid 'num' parameter:", num);
 			return [];
+		}
+
+		if(!num) {
+			totalNumCondition = true;
 		}
 
 		// Apply filter if provided
@@ -180,7 +186,7 @@ class Query {
 		});
 
 		// Randomly select 'num' documents
-		stack.push({ $sample: { size: num } });
+		if(!totalNumCondition) stack.push({ $sample: { size: num } });
 
 		try {
 			const cursor = this.collection.aggregate(stack);
