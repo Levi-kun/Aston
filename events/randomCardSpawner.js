@@ -29,8 +29,24 @@ function chooseRank(rarity) {
 		}
 	}
 }
-
-async function addToPlayer(user, guild, card) {
+function capitalizeFirstLetter(str) {
+	return str
+		.split(" ")
+		.map((word) => {
+			for (let i = 0; i < word.length; i++) {
+				if (/[a-zA-Z]/.test(word.charAt(i))) {
+					return (
+						word.slice(0, i) +
+						word.charAt(i).toUpperCase() +
+						word.slice(i + 1)
+					);
+				}
+			}
+			return word; // If no alphabetical characters, return the word as is
+		})
+		.join(" ");
+}
+async function addToPlayer(user, card) {
 	card.addOwner(user.id);
 }
 
@@ -46,11 +62,11 @@ async function addToPlayer(user, guild, card) {
  * @returns {Promise<import('discord.js').Message>} - The sent message.
  */
 
-async function messageCreater(image, card, defaultChannel, guild) {
+async function messageCreater(image, card, defaultChannel) {
 	try {
 		const claimButton = new ButtonBuilder()
 			.setCustomId("Claim")
-			.setLabel("Claim this Card")
+			.setLabel("Claim")
 			.setStyle(ButtonStyle.Primary);
 
 		const cardEmbed = new EmbedBuilder()
@@ -84,9 +100,9 @@ async function messageCreater(image, card, defaultChannel, guild) {
 			if (i.customId === "Claim") {
 				await message.delete();
 				try {
-					await addToPlayer(i.user, guild, card);
+					await addToPlayer(i.user, card);
 					await message.channel.send(
-						`${i.user.username}, congrats on obtaining: ${card.Name}`
+						`${i.user.username}, congrats on obtaining: ${card.name}`
 					);
 				} catch (err) {
 					console.error(`Error in addToPlayer: ${err.message}`);
@@ -98,7 +114,6 @@ async function messageCreater(image, card, defaultChannel, guild) {
 		});
 
 		collector.on("end", (collected) => {
-			message.delete();
 			console.log(`Collected ${collected.size} interactions.`);
 		});
 	} catch (err) {
@@ -133,14 +148,13 @@ module.exports = {
 
 			// Extract the first card from the results
 			card = card[0].lv;
-			console.log(1, card);
 			a = await new Card(card).convertToOwnedCard(guild.id);
-			console.log(2, a);
+
 			// Get the default channel ID
 			let guildData;
 			try {
 				const guildQuery = new Query("guildDataBase");
-				guildData = await guildQuery.readOne({ id: guild.id });
+				guildData = await guildQuery.readOne({ id: `${guild.id}` });
 				if (!guildData) {
 					console.error("Guild data not found", guild.id, guild.name);
 					return;
@@ -151,7 +165,6 @@ module.exports = {
 			}
 
 			const defaultChannelId = guildData.channelInformation.default._id;
-
 			// Fetch card photos
 			let photos;
 			try {

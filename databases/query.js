@@ -240,6 +240,8 @@ class Query {
 		try {
 			const result = await this.collection.findOne(query);
 			return result;
+		} catch (e) {
+			console.error("Error reading document:", e);
 		} finally {
 			await this.disconnect(); // Ensure disconnect
 		}

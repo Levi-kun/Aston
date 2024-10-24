@@ -11,6 +11,10 @@ const ownedCardsSchema = {
 			"inGroup",
 		],
 		properties: {
+			name: {
+				bsonType: "string",
+				description: "Name of the card",
+			},
 			_id: {
 				bsonType: "objectId",
 				description: "Unique identifier for the owned card",
@@ -50,7 +54,7 @@ const ownedCardsSchema = {
 			},
 			move_ids: {
 				bsonType: "array",
-				items: { bsonType: "int" },
+				items: { bsonType: "objectId" },
 				description: "List of move IDs associated with the card",
 			},
 			inGroup: {
