@@ -28,12 +28,14 @@ module.exports = {
 		const cardName = interaction.options.getString("name")?.toLowerCase();
 		const user = interaction.options.getUser("user") || interaction.user;
 
-		const ownedCardsQuery = new Query("ownedCards")
+		const ownedCardsQuery = new Query("ownedCards");
 
 		try {
 			if (!cardName) {
 				// **1. Fetch All Cards Owned by the User Using Card Class**
-				const userCards = await ownedCardsQuery.aggregate({ user_id: user.id });
+				const userCards = await ownedCardsQuery.aggregate({
+					player_id: user.id,
+				});
 
 				if (!userCards || userCards.length === 0) {
 					return interaction.reply({
@@ -47,25 +49,23 @@ module.exports = {
 				// **2. Generate Embeds for Each Card Including Images**
 				const generateEmbed = (card, index, total) => {
 					const firstPhoto =
-						card.pictures && card.pictures.length > 0
-							? card.pictures[0]
+						card._photoUrls && card._photoUrls.length > 0
+							? card._photoUrls
 							: "https://example.com/default-card-image.png"; // Replace with your default image URL
 
 					return new EmbedBuilder()
 						.setTitle(`Card: ${card.name}`)
 						.setDescription(
-							`**ID:** ${
-								card.card_id
-							}\n**Rank:** ${card.getRarity()}\n**Power:** ${
-								card.realPower
-							}`
+							`**ID:** ${card.card_id}\n**Rank:** ${card.rank}\n**Power:** ${card.realPower}`
 						)
 						.setImage(firstPhoto) // Display the first photo
 						.setFooter({ text: `Card ${index + 1} of ${total}` });
 				};
-
+				const ownedCardObject = new OwnedCard().buildsWithData(
+					userCards[currentIndex].lv
+				);
 				const embed = generateEmbed(
-					userCards[currentIndex],
+					ownedCardObject,
 					currentIndex,
 					userCards.length
 				);
@@ -118,10 +118,12 @@ module.exports = {
 								? currentIndex + 1
 								: currentIndex;
 					}
-
+					const newownedCardObject = new OwnedCard().buildsWithData(
+						userCards[currentIndex].lv
+					);
 					// **6. Generate the New Embed with Updated Index**
 					const newEmbed = generateEmbed(
-						userCards[currentIndex],
+						newownedCardObject,
 						currentIndex,
 						userCards.length
 					);
@@ -159,8 +161,13 @@ module.exports = {
 			} else {
 				// **10. Existing Card Inspection Logic with Specific Card Name**
 
-				const card = user ? await ownedCardsQuery.findOne({ user_id: user.id, name: cardName  }) : await Card.getCardByParam({ name: cardName });
-				
+				const card = user
+					? await ownedCardsQuery.readOne({
+							player_id: user.id,
+							name: cardName,
+					  })
+					: await Card.getCardByParam({ name: cardName });
+
 				if (!card) {
 					return interaction.reply({
 						content: `${user.username} does not own any cards named "${cardName}".`,

@@ -40,7 +40,7 @@ class Card {
 	 */
 
 	static async getCardByParam(filter) {
-		const data = await animeCardListQuery.findOne(filter);
+		const data = await animeCardListQuery.readOne(filter);
 		if (!data.lv) {
 			throw new Error("Card not found in animeCardList");
 		}
@@ -57,6 +57,7 @@ class Card {
 			.addName(this.name)
 			.addVersion(this.version)
 			.addRank(this.rarity)
+			.addId()
 			.addCardId(this._id);
 
 		const moveInfo = await this.grabCardMoves(ownedCard._id);
@@ -68,7 +69,7 @@ class Card {
 	}
 
 	async grabPhotosForCard() {
-		const photo = pictureQuery.findOne({ card_id: this._id });
+		const photo = pictureQuery.readOne({ card_id: this._id });
 
 		this._photoUrl = photo.attachment;
 
@@ -220,7 +221,19 @@ class Card {
 
 		return power;
 	}
-
+	getRarity() {
+		if (this.rank <= 2) {
+			return "B";
+		} else if (this.rank <= 3) {
+			return "A";
+		} else if (this.rank <= 4) {
+			return "S";
+		} else if (this.rank <= 5) {
+			return "S+";
+		} else {
+			return "C";
+		}
+	}
 	// Additional methods related to card data can be added here if needed.
 }
 
@@ -238,7 +251,7 @@ class OwnedCard {
 		this.card_id;
 		this.inGroup;
 		this._cloneCard;
-		this.newCard = false;
+		this._allowChange = false;
 		this.move_ids = [];
 		this._move_sets = [];
 
@@ -250,10 +263,20 @@ class OwnedCard {
 				if (prop.startsWith("_" && !prop === "_id")) return;
 
 				if (prop === "owner") {
+					const checker = await ownedCardsQuery.checkOne({
+						_id: new ObjectId(this._id),
+					});
+					if (checker) return;
+
 					this.newCard = this.createOwnedCardDocument();
 				}
 
-				if (!this._cloneCard && !this.newCard && this.owner) {
+				if (
+					!this._cloneCard &&
+					!this.newCard &&
+					this.owner &&
+					this._allowChange
+				) {
 					try {
 						await ownedCardsQuery.updateOne(
 							{ _id: this._id }, // Find card by its ID
@@ -272,6 +295,10 @@ class OwnedCard {
 	/**
 	 * Builder Methods for the OwnedCard class can be added here.
 	 */
+	addId(id = new ObjectId()) {
+		this._id = id;
+		return this;
+	}
 	addVersion(version) {
 		this.version = version;
 		return this;
@@ -299,7 +326,7 @@ class OwnedCard {
 		return this;
 	}
 	addCreatedAt(createdAt) {
-		this.createdAt = createdAt;
+		this.created_At = createdAt;
 		return this;
 	}
 
@@ -335,7 +362,23 @@ class OwnedCard {
 		return this;
 	}
 	//
+	buildsWithData(data) {
+		this.addVersion(data.vr);
+		this.addRealPower(data.realPower);
+		this.addName(data.name);
+		this.addRank(data.rank);
+		this.addGuildId(data.guild_id);
+		this.addId(data._id);
+		this._photoUrl = this.grabPhotosForCard();
+		this.addCreatedAt(data.created_At);
+		this.addOwner(data.player_id);
+		this.addCardId(data.card_id);
+		this.addinGroup(data.inGroup);
 
+		this.addMoveIds([...data.move_ids]);
+
+		return this;
+	}
 	/**
 	 * Static method to create a new owned card and insert it into the database.
 	 * @param {Object} args - Data for the new card.
@@ -352,7 +395,7 @@ class OwnedCard {
 	 * @returns {Promise<OwnedCard>} - Returns an OwnedCard object.
 	 */
 	static async getCardByParam(filter) {
-		const data = await ownedCardsQuery.findOne(filter);
+		const data = await ownedCardsQuery.readOne(filter);
 		if (!data) {
 			throw new Error("Owned card not found");
 		}
@@ -403,16 +446,15 @@ class OwnedCard {
 		};
 
 		const a = await ownedCardsQuery.insertOne(ownedCardDocument);
-		console.log(a);
 		return true;
 	}
 
 	async grabPhotosForCard() {
-		const photo = pictureQuery.findOne({card_id: this.card_id})
+		const photo = pictureQuery.readOne({ card_id: this.card_id });
 
 		this._photoUrl = photo.attachment;
 
-		return this._photoUrl
+		return this._photoUrl;
 	}
 	// Example usage
 
@@ -422,7 +464,7 @@ class OwnedCard {
 	async getMoveSets() {
 		if (this.move_ids.length) {
 			for (let i = 0; i < this.move_ids.length; i++) {
-				let moveData = await ownedMovesQuery.findOne({
+				let moveData = await ownedMovesQuery.readOne({
 					_id: this.move_ids[i],
 					card_id: this.card_id,
 				});

@@ -46,7 +46,7 @@ function capitalizeFirstLetter(str) {
 		})
 		.join(" ");
 }
-async function addToPlayer(user, card) {
+function addToPlayer(user, card) {
 	card.addOwner(user.id);
 }
 
@@ -93,16 +93,19 @@ async function messageCreater(image, card, defaultChannel) {
 			i.customId === "next" || i.customId === "Claim";
 		const collector = message.createMessageComponentCollector({
 			filter: collectorFilter,
-			time: 600_000,
+			time: 300_000,
 		});
 
 		collector.on("collect", async (i) => {
 			if (i.customId === "Claim") {
-				await message.delete();
 				try {
-					await addToPlayer(i.user, card);
+					addToPlayer(i.user, card);
 					await message.channel.send(
-						`${i.user.username}, congrats on obtaining: ${card.name}`
+						`${
+							i.user.username
+						}, congrats on obtaining: ${capitalizeFirstLetter(
+							card.name
+						)}`
 					);
 				} catch (err) {
 					console.error(`Error in addToPlayer: ${err.message}`);
@@ -110,11 +113,32 @@ async function messageCreater(image, card, defaultChannel) {
 						`Sorry ${i.user.username}, there was an error claiming the card. Please try again later.`
 					);
 				}
+				collector.stop();
 			}
 		});
 
-		collector.on("end", (collected) => {
-			console.log(`Collected ${collected.size} interactions.`);
+		collector.on("end", async (collected, reason) => {
+			try {
+				console.log(
+					`Collected ${collected.size} interactions, ${reason}`
+				);
+
+				if (reason === "time") {
+					console.log(`Resetting ${message}`);
+					await message.edit({
+						content: `${card.name} :eyes:`,
+						components: [],
+						embeds: [],
+					});
+				} else {
+					await message.edit({
+						components: [],
+					});
+				}
+			} catch (err) {
+				console.error(`Error in collector.on('end'): ${err.message}`);
+				throw err;
+			}
 		});
 	} catch (err) {
 		console.error(`Error in messageCreater: ${err.message}`);

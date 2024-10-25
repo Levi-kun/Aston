@@ -4,6 +4,10 @@ const mpath = require("mpath");
 const path = require("path");
 require("dotenv").config();
 
+function isObject(value) {
+	return typeof value === "object" && value !== null;
+}
+
 class Query {
 	constructor(collectionName) {
 		if (!collectionName) {
@@ -144,8 +148,6 @@ class Query {
 		}
 	}
 
-    
-
 	/*
 	 * Requires the MongoDB Node.js Driver
 	 * https://mongodb.github.io/node-mongodb-native
@@ -153,19 +155,24 @@ class Query {
 
 	async aggregate(num, filter = false) {
 		await this.connect();
-
+		let name = "name";
 		// Validate num parameter before executing aggregation pipeline
 		this.validateData(num);
 		// Initialize the aggregation pipeline
 		const stack = [];
-		const totalNumCondition = false
+		let totalNumCondition = false;
 		// Ensure num is valid
+
+		if (isObject(num)) {
+			(filter = num), (num = null), (name = "_id");
+		}
+
 		if (num <= 0 && typeof num == "number") {
 			console.error("Invalid 'num' parameter:", num);
 			return [];
 		}
 
-		if(!num) {
+		if (!num || num === null) {
 			totalNumCondition = true;
 		}
 
@@ -180,18 +187,19 @@ class Query {
 		// Group by name and pick the highest version
 		stack.push({
 			$group: {
-				_id: "$name", // Group by the 'name' field
+				_id: `$${name}`, // Group by the 'name' field
 				lv: { $first: "$$ROOT" }, // Get the highest version document for each group
 			},
 		});
 
 		// Randomly select 'num' documents
-		if(!totalNumCondition) stack.push({ $sample: { size: num } });
+		if (!totalNumCondition && num !== null) {
+			stack.push({ $sample: { size: num } });
+		}
 
 		try {
 			const cursor = this.collection.aggregate(stack);
 			const results = await cursor.toArray();
-
 			return results;
 		} catch (error) {
 			console.error("Error during aggregation:", error);
@@ -225,14 +233,7 @@ class Query {
 		try {
 			const result = await this.readOne(query);
 
-			if (!result) return false; // No document found, return false
-
-			// Check if all key-value pairs in the query match the result
-			for (const key in query) {
-				if (query[key] !== result[key]) {
-					return false; // If any key doesn't match, return false
-				}
-			}
+			if (Object.keys(result).length <= 0) return false; // No document found, return false
 
 			return true; // If all key-value pairs match, return true
 		} finally {
