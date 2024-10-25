@@ -124,7 +124,6 @@ async function messageCreater(image, card, defaultChannel) {
 				);
 
 				if (reason === "time") {
-					console.log(`Resetting ${message}`);
 					await message.edit({
 						content: `${card.name} :eyes:`,
 						components: [],

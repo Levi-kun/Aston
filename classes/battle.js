@@ -9,6 +9,8 @@ const {
 const { Query } = require("../databases/query.js");
 const { Card } = require("./cardManager.js");
 
+const { monitorCollection } = require("../databases/expire.js");
+
 const BattleStatus = Object.freeze({
 	PENDING: "pending",
 	DENIED: "denied",
@@ -30,20 +32,20 @@ class Battle {
 	// Move static properties outside the constructor
 	static _pvpBattlesQuery = new Query("pvpBattles");
 
-	constructor(battleData) {
+	constructor() {
 		// ID information
-		this._id = battleData._id;
-		this.guild_id = battleData.guild_id;
+		this._id;
+		this.guild_id;
 
-		this.challenger_id = battleData.challenger_id;
-		this.challenger_cards = battleData.challenger_cards;
+		this.challenger_id;
+		this.challenger_cards;
 
-		this.challenged_id = battleData.challenged_id;
-		this.challenged_cards = battleData.challenged_cards;
+		this.challenged_id;
+		this.challenged_cards;
 
-		this.status = battleData.status || BattleStatus.PENDING;
-		this.created_at = battleData.created_at || new Date();
-		this.current_turn = battleData.current_turn || null;
+		this.status;
+		this.created_at;
+		this.current_turn;
 
 		this._localOnly = new Set();
 		this._previousState = {};
@@ -62,7 +64,7 @@ class Battle {
 					try {
 						await Battle._pvpBattlesQuery.updateOne(
 							{ _id: this._id },
-							{ $set: { [prop]: value } }
+							{ [prop]: value }
 						);
 					} catch (error) {
 						console.error("Error updating battle:", error);
@@ -72,6 +74,106 @@ class Battle {
 			},
 		});
 	}
+	/*}
+	 * 	}
+	 * }
+	 * }
+	 *  Builder Functions for the Battle Object!
+	 * }
+	 * }
+	 *  }
+	 */
+
+	addId(id) {
+		this._id = id;
+		return this;
+	}
+
+	addGuildId(guild_id) {
+		this.guild_id = guild_id;
+
+		return this;
+	}
+
+	addChallengerId(challenger_id) {
+		this.challenger_id = challenger_id;
+		return this;
+	}
+	addChallengerCards(challenger_cards) {
+		if (!challenger_cards) challenger_cards = [];
+		this.challenger_cards = challenger_cards;
+		return this;
+	}
+	addChallengedId(challenged_id) {
+		this.challenged_id = challenged_id || 0;
+		return this;
+	}
+	addChallengedCards(challenged_cards) {
+		if (!challenged_cards) challenged_cards = [];
+		this.challenged_cards = challenged_cards;
+		return this;
+	}
+	addStatus(status) {
+		this.status = status;
+		return this;
+	}
+	addCreatedAt(created_at) {
+		if (!created_at) created_at = new Date();
+		this.created_at = created_at;
+		return this;
+	}
+	addCurrentTurn(current_turn) {
+		if (!current_turn) current_turn = this.challenged_id; // Default value for current_turn is challenger_id
+		this.current_turn = current_turn;
+		return this;
+	}
+	addTurnCount(turnCount) {
+		this.turnCount = turnCount;
+		return this;
+	}
+	addFinishedAt(finished_at) {
+		if (!finished_at) finished_at = new Date();
+		this.finished_at = finished_at;
+		return this;
+	}
+	//
+	buildBattle(data) {
+		const newBattle = new Battle()
+			.addId(data._id)
+			.addGuildId(data.guild_id)
+			.addChallengerId(data.challenger_id)
+			.addChallengerCards(data.challenger_cards)
+			.addChallengedId(data.challenged_id)
+			.addChallengedCards(data.challenged_cards)
+			.addStatus(data.status)
+			.addCreatedAt(data.created_at)
+			.addCurrentTurn(data.current_turn)
+			.addTurnCount(data.turnCount)
+			.addFinishedAt(data.finished_at);
+		console.log(newBattle);
+		return newBattle;
+	}
+
+	async createBattleDocument() {
+		// Build the document object
+		const ownedCardDocument = {
+			_id: this._id,
+			guild_id: this.guild_id,
+			challenger_id: this.challenger_id,
+			challenger_cards: this.challenger_cards || [],
+			challenged_id: this.challenged_id,
+			challenged_cards: this.challenged_cards || [],
+			status: this.status,
+			created_At: new Date(),
+		};
+
+		const a = await ownedCardsQuery.insertOne(ownedCardDocument);
+		ownedCardQuery.on("inserted", (data) => {
+			monitorCollection(data);
+		});
+		return true;
+	}
+	// Methods for handling battle state transitions
 
 	_lockProperty(prop) {
 		this._localOnly.add(prop);
@@ -87,31 +189,16 @@ class Battle {
 		challenged_id,
 		state = BattleStatus.PENDING
 	) {
-		if (state === BattleStatus.FORFEIT) {
+		if (state === "start") {
 			const data = {
 				$or: [
-					{ challenged_id: challenged_id },
-					{ challenger_id: challenged_id },
+					{ challenged_id: challenger_id },
+					{ challenger_id: challenger_id },
 				],
 				guild_id: guild_id,
 			};
 			const existingBattle = await Battle._pvpBattlesQuery.checkOne(data);
 			if (existingBattle) {
-				const existingData = Battle._pvpBattlesQuery.readOne(data);
-				return new Battle(existingData);
-			}
-			return "No forfeit battle found.";
-		}
-		if (state === "start") {
-			const data = {
-				$or: [
-					{ challenged_id: challenged_id },
-					{ challenger_id: challenged_id },
-				],
-				guild_id: guild_id,
-			};
-			const existingBattle = await Battle._pvpBattlesQuery.readOne(data);
-			if (existingBattle && Object.keys(existingBattle).length > 0) {
 				return "You already issued a challenge to this user.";
 			}
 
@@ -121,8 +208,8 @@ class Battle {
 		try {
 			const data = {
 				$or: [
-					{ challenged_id: challenged_id },
-					{ challenger_id: challenged_id },
+					{ challenged_id: challenger_id },
+					{ challenger_id: challenger_id },
 				],
 				guild_id: guild_id,
 			};
@@ -140,10 +227,9 @@ class Battle {
 				created_at: new Date(),
 			};
 
-			const result = await Battle._pvpBattlesQuery.insertOne(
-				newBattleData
-			);
-			return new Battle(result);
+			console.log("Creating new battle:", newBattleData);
+			const result = await this.createBattleDocument(newBattleData);
+			return new Battle.buildBattle(newBattleData);
 		} catch (error) {
 			console.error("Error creating battle instance:", error);
 			throw error;
@@ -179,29 +265,45 @@ class Battle {
 		await this.updateStatus(BattleStatus.DENIED);
 	}
 
-	async forfeit(loserid) {
-		const winner_id =
-			this.challenger_id === loserid
-				? this.challenged_id
-				: this.challenger_id;
-
-		this.updateStatus(BattleStatus.FINISHED);
-		this._localOnly.clear();
-		this.winner_id = winner_id;
-		this.loser_id = loserid;
-		this.finished_at = new Date();
-
+	static async forfeit(guild_id, loser_id) {
 		try {
-			userQuery = new Query("userDataBase");
+			const query = {
+				guild_id: guild_id,
+				$or: [{ challenged_id: loser_id }, { challenger_id: loser_id }],
+			};
+			const userQuery = new Query("userDataBase");
+			const pvpQuery = new Query("pvpBattles");
+			const data = await pvpQuery.readOne(query);
+			const initialize = new Battle();
+			const battle = initialize.buildBattle(data);
 
-			userQuery.update(
-				{ id: loserid, _guildId: this.guild_id },
-				{ $set: { inc: { loses: 1 } } }
-			);
-			userQuery.update(
-				{ id: winner_id, _guildId: this.guild_id },
-				{ $set: { inc: { wins: 1 } } }
-			);
+			const winner_id =
+				battle.challenger_id === loser_id
+					? battle.challenged_id
+					: battle.challenger_id;
+
+			battle.updateStatus(BattleStatus.FINISHED);
+			battle._localOnly.clear();
+			battle.winner_id = winner_id;
+			battle.loser_id = loser_id;
+			battle.finished_at = new Date();
+
+			const loserSearch = {
+				id: battle.loser_id,
+				_guild_id: battle.guild_id,
+			};
+			const loserQuery = { $inc: { loses: 1 } };
+
+			const winnerSearch = {
+				id: battle.winner_id,
+				_guild_id: battle.guild_id,
+			};
+			const winnerQuery = { $inc: { wins: 1 } };
+
+			const loser = userQuery.updateOne(loserSearch, loserQuery);
+			const winner = userQuery.updateOne(winnerSearch, winnerQuery);
+
+			return { loser, winner, battle };
 		} catch (error) {
 			console.error("Error updating user statistics:", error);
 		}

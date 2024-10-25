@@ -2,7 +2,7 @@ const userDataBase = {
 	collectionName: "userDataBase",
 	schema: {
 		bsonType: "object", // Specifies that the root type is an object
-		required: ["_id", "_guildId", "name"], // Required fields
+		required: ["_id", "_guild_id", "name"], // Required fields
 		additionalProperties: false, // Disallow any fields that are not explicitly defined}
 		properties: {
 			_id: {
@@ -13,7 +13,7 @@ const userDataBase = {
 				bsonType: "string",
 				description: "Unique identifier for the user",
 			},
-			_guildId: {
+			_guild_id: {
 				bsonType: "string",
 				description: "guild id this user belongs to",
 			},

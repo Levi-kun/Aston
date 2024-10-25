@@ -34,21 +34,42 @@ module.exports = {
 				"Please provide a valid user as an opponent."
 			);
 		}
+
 		if (challenged.bot)
-			if (challenger.id === challenged.id)
-				return interaction.reply("Boss, you can't challenge yourself.");
+			return interaction.reply(
+				"Boss, you can't just challenge one of those robos."
+			);
+
+		if (challenger.id === challenged.id)
+			return interaction.reply("Boss, you can't challenge yourself.");
 
 		const guild = interaction.guild;
+
+		const battle = await Battle.createBattle(
+			guild.id,
+			challenger.id,
+			challenged.id,
+			"start"
+		);
+
+		if (battle === "You already issued a challenge to this user.") {
+			return interaction.reply({ content: battle, ephemeral: true });
+		}
+
+		if (
+			battle._pvpBattlesQuery.checkOne({
+				$or: {
+					challenger_id: challenger.id,
+					challenged_id: challenger.id,
+				},
+				guild_id: guild.id,
+			})
+		)
+			return interaction.reply({
+				content: "Boss you can't duel if your already in one",
+				ephemeral: true,
+			});
 		try {
-			const battle = await Battle.createBattle(
-				guild.id,
-				challenger.id,
-				challenged.id,
-				"start"
-			);
-			if (battle === "You already issued a challenge to this user.") {
-				return interaction.reply(battle);
-			}
 			const acceptEmbed = new EmbedBuilder()
 				.setTitle("Battle Request")
 				.setDescription(
@@ -68,13 +89,24 @@ module.exports = {
 					.setEmoji("❌")
 					.setStyle(ButtonStyle.Secondary)
 			);
-
-			const message = await challenged.send({
-				embeds: [acceptEmbed],
-				components: [buttonRow],
-				fetchReply: true,
-			});
-
+			try {
+				const message = await challenged.send({
+					embeds: [acceptEmbed],
+					components: [buttonRow],
+					fetchReply: true,
+				});
+			} catch (error) {
+				return interaction.reply({
+					content: "Failed to send message to user in DMs.",
+					ephemeral: true,
+				});
+			}
+			const battle = await Battle.createBattle(
+				guild.id,
+				challenger.id,
+				challenged.id,
+				"start"
+			);
 			interaction.reply({
 				content: "Hand shake recieved...",
 				ephemeral: true,
@@ -119,6 +151,7 @@ module.exports = {
 						content: `"I'll be back." \n- Note from ${interaction.user.username}`, // Changed 'name' to 'username'
 						ephemeral: true,
 					});
+					battle.cancelBattle();
 				}
 				i.delete();
 			});

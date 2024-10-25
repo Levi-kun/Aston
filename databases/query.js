@@ -2,14 +2,16 @@ const { MongoClient } = require("mongodb");
 const fs = require("fs").promises; // Use promises-based fs functions
 const mpath = require("mpath");
 const path = require("path");
+const EventEmitter = require("events");
 require("dotenv").config();
 
 function isObject(value) {
 	return typeof value === "object" && value !== null;
 }
 
-class Query {
+class Query extends EventEmitter {
 	constructor(collectionName) {
+		super();
 		if (!collectionName) {
 			console.error("Collection name is required.");
 		}
@@ -101,10 +103,17 @@ class Query {
 		await this.connect(); // Ensure DB connection
 		try {
 			await this.validateData(data); // Validate data before inserting
-			const result = await this.collection.insertOne(data);
+
+			if (!this.checkOne(data) || !this.checkOne({ _id: data._id }))
+				return { error: "Document already exists." };
+
+			let result = await this.collection.insertOne(data);
 
 			if (result.acknowledged === true) {
-				this.readOne({ _id: result.insertedId });
+				// Emit "inserted" event
+				result = this.readOne({ _id: result.insertedId });
+
+				this.emit("inserted", result);
 			}
 			return result;
 		} finally {
@@ -141,6 +150,10 @@ class Query {
 				{ $set: newData },
 				options
 			);
+
+			if (result.modifiedCount > 0 || result.upsertedCount > 0) {
+				this.emit("updated", result); // Emit "updated" event
+			}
 
 			return result;
 		} finally {
@@ -232,7 +245,7 @@ class Query {
 		await this.connect();
 		try {
 			const result = await this.readOne(query);
-
+			if (!result) return false; // No document found, return false
 			if (Object.keys(result).length <= 0) return false; // No document found, return false
 
 			return true; // If all key-value pairs match, return true

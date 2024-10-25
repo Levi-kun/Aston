@@ -14,15 +14,8 @@ module.exports = {
 		const loserId = user.id;
 		const guildId = guild.id;
 
+		const { winner, battle } = await Battle.forfeit(guildId, loserId);
 		try {
-			// Retrieve and handle the battle
-			const battle = await Battle.createBattle(
-				guildId,
-				0,
-				loserId,
-				BattleStatus.FORFEIT
-			);
-
 			if (battle === "No forfeit battle found.") {
 				return interaction.reply({
 					content: "You are not currently in an ongoing battle!",
@@ -30,20 +23,16 @@ module.exports = {
 				});
 			}
 
-			const { winner_id: winnerId } = await battle.forfeit(loserId);
-
 			// Send notification messages
-			const content = `<@${loserId}> has forfeited the game against <@${winnerId}>.`;
+			const content = `<@${loserId}> has forfeited the game against <@${winner.id}>.`;
 			await interaction.reply({ content, ephemeral: true });
 
 			const battleChannel = await battle.getBattleChannel();
 			if (Object.keys(battleChannel).length == 0) {
 				await battleChannel.send({
-					content: `<@${loserId}> has forfeited the battle. <@${winnerId}> wins by default!`,
+					content: `<@${loserId}> has forfeited the battle. <@${winner.id}> wins by default!`,
 				});
 			}
-
-			await battle.endBattle(winnerId);
 		} catch (error) {
 			console.error(`Error handling forfeit: ${error}`);
 		}
