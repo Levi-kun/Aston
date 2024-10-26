@@ -7,6 +7,26 @@ const {
 	EmbedBuilder,
 } = require("discord.js");
 
+// Import Battle class from the classes folder to create a new battle instance.
+const { Battle, BattleStatus } = require("../../classes/battle.js");
+
+const { Query } = require("../../databases/query.js");
+const pvpQuery = new Query("pvpBattles");
+
+function checkForUndesiredInteractions(interaction, challenger, challenged) {
+	if (!challenged) {
+		return 0;
+	}
+
+	if (challenged.bot) {
+		return 1;
+	}
+
+	if (challenger.id === challenged.id) {
+		return 2;
+	}
+}
+
 module.exports = {
 	category: "cards",
 	data: new SlashCommandBuilder()
@@ -23,52 +43,51 @@ module.exports = {
 				.setRequired(true)
 		),
 	async execute(interaction) {
-		// Import Battle class from the classes folder to create a new battle instance.
-		const { Battle } = require("../../classes/battle.js");
-
+		const guild = interaction.guild;
 		const challenger = interaction.user;
 		const challenged = interaction.options.getUser("opponent");
 
-		if (!challenged) {
+		const undesiredIntChecker = checkForUndesiredInteractions(
+			interaction,
+			challenger,
+			challenged
+		);
+
+		if (undesiredIntChecker == 0) {
 			return interaction.reply(
 				"Please provide a valid user as an opponent."
 			);
-		}
-
-		if (challenged.bot)
+		} else if (undesiredIntChecker == 1) {
 			return interaction.reply(
 				"Boss, you can't just challenge one of those robos."
 			);
-
-		if (challenger.id === challenged.id)
+		} else if (undesiredIntChecker == 2) {
 			return interaction.reply("Boss, you can't challenge yourself.");
-
-		const guild = interaction.guild;
-
-		const battle = await Battle.createBattle(
-			guild.id,
-			challenger.id,
-			challenged.id,
-			"start"
-		);
-
-		if (battle === "You already issued a challenge to this user.") {
-			return interaction.reply({ content: battle, ephemeral: true });
 		}
 
-		if (
-			battle._pvpBattlesQuery.checkOne({
-				$or: {
-					challenger_id: challenger.id,
-					challenged_id: challenger.id,
-				},
-				guild_id: guild.id,
-			})
-		)
-			return interaction.reply({
-				content: "Boss you can't duel if your already in one",
-				ephemeral: true,
-			});
+		const data = {
+			guild_id: guild.id,
+			challenger_id: challenger.id,
+			challenged_id: challenged.id,
+			channel_id: interaction.channel.id,
+			status: BattleStatus.PENDING,
+			created_at: new Date(),
+		};
+
+		const newBattle = Battle.createNew(data);
+
+		const checker = await pvpQuery.checkOne(
+			newBattle.grabAllProperties(true)
+		);
+		console.log(checker);
+		if (checker) {
+			return interaction.reply(
+				"Boss, you've already challenged this user. Please wait for their response."
+			);
+		}
+
+		newBattle.synchronizeWithDB();
+
 		try {
 			const acceptEmbed = new EmbedBuilder()
 				.setTitle("Battle Request")

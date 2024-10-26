@@ -119,13 +119,9 @@ const pvpBattlesSchema = {
 					},
 				},
 			},
-			challenger_powers: {
-				bsonType: "array",
-				items: { bsonType: "string" },
-			},
-			challenged_powers: {
-				bsonType: "array",
-				items: { bsonType: "string" },
+			channel_id: {
+				bsonType: "string",
+				description: "Channel ID where the battle started.",
 			},
 			current_turn: { bsonType: "string" },
 			status: { bsonType: "string" },

@@ -259,6 +259,7 @@ class Query extends EventEmitter {
 		await this.connect();
 		try {
 			const result = await this.collection.findOne(query);
+			if (result == null) return {};
 			return result;
 		} catch (e) {
 			console.error("Error reading document:", e);
