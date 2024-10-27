@@ -5,7 +5,6 @@ const util = require("util");
 const path = require("node:path");
 
 const bot = require("./client.js");
-
 require("dotenv").config();
 
 const token = process.env.TOKEN;

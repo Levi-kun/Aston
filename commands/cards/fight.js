@@ -27,6 +27,23 @@ function checkForUndesiredInteractions(interaction, challenger, challenged) {
 	}
 }
 
+function grabMostRecentGame(array) {
+	let mostRecent = null;
+	for (const game of array) {
+		if (mostRecent === null || game.created_at > mostRecent.created_at) {
+			mostRecent = game;
+		}
+	}
+	return mostRecent;
+}
+
+function formatTime(ms) {
+	const totalSeconds = Math.floor(ms / 1000);
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 module.exports = {
 	category: "cards",
 	data: new SlashCommandBuilder()
@@ -76,17 +93,52 @@ module.exports = {
 
 		const newBattle = Battle.createNew(data);
 
-		const checker = await pvpQuery.checkOne(
+		let checker = await pvpQuery.readMany(
 			newBattle.grabAllProperties(true)
 		);
-		console.log(checker);
-		if (checker) {
+
+		checker = grabMostRecentGame(checker);
+
+		const tenminuets = 10 * 60 * 1000; // 10 minutes in milliseconds
+		const asofChecking = new Date() - tenminuets;
+
+		if (checker.status === BattleStatus.PENDING) {
 			return interaction.reply(
 				"Boss, you've already challenged this user. Please wait for their response."
 			);
-		}
+		} else if (
+			checker.status === BattleStatus.DENIED &&
+			new Date(checker.created_at) < asofChecking
+		) {
+			const timeLeft = formatTime(asofChecking);
+			const message = interaction.reply(
+				`Boss, you gotta wait. I know. but we got ${timeLeft} left}.`
+			);
 
-		newBattle.synchronizeWithDB();
+			const interval = setInterval(() => {
+				timeLeft -= 1000; // Decrease timeLeft by 1 second (1000 milliseconds)
+				if (timeLeft <= 0) {
+					clearInterval(interval);
+					message.edit("You can now challenge the user again.");
+				} else {
+					message.edit(
+						`Boss, you gotta wait. I know. but we got ${formatTime(
+							timeLeft
+						)} left.`
+					);
+				}
+			}, 1000);
+			return;
+		} else if (checker.status === BattleStatus.ACCEPTED) {
+			return interaction.reply(
+				"Boss, you've already accepted this user's challenge. Please wait for the battle to start."
+			);
+		} else if (checker.status === BattleStatus.IN_PROGRESS) {
+			return interaction.reply(
+				"Boss, there's already a battle in progress with this user."
+			);
+		}
+		newBattle.downSynchronizeWithDB();
 
 		try {
 			const acceptEmbed = new EmbedBuilder()
@@ -108,8 +160,9 @@ module.exports = {
 					.setEmoji("❌")
 					.setStyle(ButtonStyle.Secondary)
 			);
+			let message;
 			try {
-				const message = await challenged.send({
+				message = await challenged.send({
 					embeds: [acceptEmbed],
 					components: [buttonRow],
 					fetchReply: true,
@@ -120,12 +173,7 @@ module.exports = {
 					ephemeral: true,
 				});
 			}
-			const battle = await Battle.createBattle(
-				guild.id,
-				challenger.id,
-				challenged.id,
-				"start"
-			);
+
 			interaction.reply({
 				content: "Hand shake recieved...",
 				ephemeral: true,
@@ -146,9 +194,12 @@ module.exports = {
 					await interaction.followUp(
 						"Boss, they accepted the challenge."
 					);
-					await battle.startBattle();
+
+					newBattle.status = BattleStatus.ON_GOING;
+
+					await newBattle.startBattle();
 				} else if (i.customId === "deny_battle") {
-					await battle.cancelBattle();
+					await newBattle.stopBattle("denied");
 					await interaction.followUp({
 						content: "Boss, they denied the challenge.",
 						ephemeral: true,
@@ -163,14 +214,14 @@ module.exports = {
 				i.reply({ content: "Good luck. Boss.", ephemeral: true });
 			});
 
-			collector.on("end", (i, reason) => {
-				console.log(battle);
+			collector.on("end", async (i, reason) => {
 				if (reason === "time") {
 					challenged.send({
 						content: `"I'll be back." \n- Note from ${interaction.user.username}`, // Changed 'name' to 'username'
 						ephemeral: true,
 					});
-					battle.cancelBattle();
+					await i.delete();
+					await newBattle.stopBattle("denied");
 				}
 				i.delete();
 			});

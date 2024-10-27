@@ -83,7 +83,7 @@ module.exports = {
 							_guild_id: guild.id,
 						};
 
-						const userExists = await userQuery.readOne(
+						const userExists = await userQuery.checkOne(
 							userCheckQuery
 						);
 						if (userExists) return;
@@ -93,6 +93,8 @@ module.exports = {
 							id: userId,
 							_guild_id: guildId,
 							name: userName,
+							wins: 0,
+							losses: 0,
 						};
 						return userQuery.insertOne(userQueryData);
 					});

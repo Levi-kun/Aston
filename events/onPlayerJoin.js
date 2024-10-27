@@ -22,6 +22,8 @@ async function createOrInsertUser(guildId, userId, userName) {
 			id: userId,
 			_guild_id: guildId,
 			name: userName,
+			wins: 0,
+			losses: 0,
 		};
 		await userQuery.insertOne(creationQuery);
 		console.log(`User ${userName} (${userId}) added to the database.`);

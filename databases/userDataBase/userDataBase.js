@@ -35,9 +35,9 @@ const userDataBase = {
 				bsonType: "int",
 				description: "How many times the won",
 			},
-			loses: {
+			losses: {
 				bsonType: "int",
-				description: "List of loses with associated game IDs",
+				description: "how many times they lost",
 			},
 			location: {
 				bsonType: "string",

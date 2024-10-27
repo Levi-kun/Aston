@@ -280,7 +280,7 @@ class OwnedCard {
 					try {
 						await ownedCardsQuery.updateOne(
 							{ _id: this._id }, // Find card by its ID
-							{ $set: { prop: value } } // Update the changed property
+							{ [prop]: value } // Update the changed property
 						);
 					} catch (error) {
 						console.error("Error updating card:", error);

@@ -71,6 +71,18 @@ const guildDataBaseSchema = {
 					},
 				},
 			},
+			otherData: {
+				bsonType: "object",
+				description: "Any other data needed",
+				properties: {
+					cleanUp: {
+						bsonType: "bool",
+						description:
+							"Flag for if server wants to clean up pvp Messages",
+					},
+				}, // Add your properties here, each with its own schema
+				additionalProperties: true,
+			},
 			pro: {
 				bsonType: "bool",
 				description: "For future use.",

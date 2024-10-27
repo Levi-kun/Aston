@@ -133,7 +133,7 @@ class Query extends EventEmitter {
 	}
 
 	// Update one document in the collection
-	async updateOne(filter, newData, options = {}) {
+	async updateOne(filter, newData, options = {}, aggergate = false) {
 		await this.connect();
 		try {
 			if (options.upsert !== false) {
@@ -144,17 +144,24 @@ class Query extends EventEmitter {
 				this.validateData(newData); // Add an option to skip validation if needed
 			}
 
+			let result;
 			// Pass in options like arrayFilters, upsert
-			const result = await this.collection.updateOne(
-				filter,
-				{ $set: newData },
-				options
-			);
-
+			if (!aggergate) {
+				result = await this.collection.updateOne(
+					filter,
+					{ $set: newData },
+					options
+				);
+			} else {
+				result = await this.collection.updateOne(
+					filter,
+					newData,
+					options
+				);
+			}
 			if (result.modifiedCount > 0 || result.upsertedCount > 0) {
 				this.emit("updated", result); // Emit "updated" event
 			}
-
 			return result;
 		} finally {
 			await this.disconnect(); // Ensure disconnect
@@ -165,6 +172,23 @@ class Query extends EventEmitter {
 	 * Requires the MongoDB Node.js Driver
 	 * https://mongodb.github.io/node-mongodb-native
 	 */
+
+	async trueControlAggergate(stack) {
+		await this.connect();
+
+		this.validateData(stack);
+
+		try {
+			console.log("stack", stack);
+			const cursor = this.collection.aggregate(stack);
+			const results = await cursor.toArray();
+			return results;
+		} catch (error) {
+			console.error("Error during true aggregation:", error);
+		} finally {
+			await this.disconnect(); // Ensure disconnect
+		}
+	}
 
 	async aggregate(num, filter = false) {
 		await this.connect();

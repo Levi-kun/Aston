@@ -9,7 +9,8 @@ const {
 const { Query } = require("../databases/query.js");
 const { Card } = require("./cardManager.js");
 const { ObjectId } = require("mongodb");
-const { monitorCollection } = require("../databases/expire.js");
+const bot = require("../client.js");
+const client = bot;
 
 const BattleStatus = Object.freeze({
 	PENDING: "pending",
@@ -28,6 +29,17 @@ const moveTypes = Object.freeze({
 	FOCUS: "FOCUS",
 });
 
+function grabMostRecentGame(array) {
+	let mostRecent = null;
+	for (const game of array) {
+		if (mostRecent === null || game.created_at > mostRecent.created_at) {
+			mostRecent = game;
+		}
+	}
+	return mostRecent;
+}
+
+const pvpQ = new Query("pvpBattles");
 class Battle {
 	constructor() {
 		this._id;
@@ -38,6 +50,28 @@ class Battle {
 
 		this.status;
 		this.created_at;
+
+		this._localOnly = new Set();
+		this._realtime_updates = false;
+
+		return new Proxy(this, {
+			set: async (target, prop, value) => {
+				target[prop] = value;
+				if (!this._realtime_updates) return true;
+				if (prop.startsWith("_") && !prop === "_id") return true;
+
+				if (prop === "_realtime_updates") return true;
+
+				const guild = client.guilds.cache.get(this.guild_id);
+				if (!guild) return;
+				const document = await pvpQ.updateOne(
+					{ _id: this._id },
+					{ [prop]: value }
+				);
+
+				return true;
+			},
+		});
 	}
 
 	addid(id) {
@@ -95,17 +129,31 @@ class Battle {
 		return this;
 	}
 
+	updateStatus(status) {
+		this.status = status;
+	}
+
+	setLocalOnly(data) {}
+
 	static createNew(data) {
 		const battle = new Battle();
 
 		battle
-			.addid(new ObjectId())
 			.addguild_id(data.guild_id)
 			.addchallenged_id(data.challenged_id)
 			.addchallenger_id(data.challenger_id)
 			.addcreated_at(data.created_at)
 			.addstatus(data.status)
 			.addchannel_id(data.channel_id);
+
+		return battle;
+	}
+
+	static createOld(data) {
+		const battle = new Battle();
+		for (const key in data) {
+			battle[key] = data[key];
+		}
 
 		return battle;
 	}
@@ -120,36 +168,85 @@ class Battle {
 			const pvpQuery = new Query("pvpBattles");
 
 			const data = await pvpQuery.readOne(query);
-			const initialize = new Battle();
-			const battle = initialize.buildBattle(data);
+
+			const battle = Battle.createOld(data);
 
 			const winner_id =
 				battle.challenger_id === loser_id
 					? battle.challenged_id
 					: battle.challenger_id;
 
-			battle.updateStatus(BattleStatus.FINISHED);
+			battle.status = BattleStatus.FORFEIT;
 			battle._localOnly.clear();
 			battle.winner_id = winner_id;
 			battle.loser_id = loser_id;
 			battle.finished_at = new Date();
+			let checker = await pvpQuery.readMany(battle.grabAllProperties());
+			checker = grabMostRecentGame(checker);
 
-			const loserSearch = {
-				id: battle.loser_id,
-				_guild_id: battle.guild_id,
+			if (checker.status !== BattleStatus.ON_GOING) {
+				return { Error: 1 };
+			}
+			await battle.upSynchronizeWithDB(); // Ensure this is awaited
+
+			const loserQuery = {
+				id: loser_id.toString(),
+				_guild_id: guild_id.toString(),
 			};
-			const loserQuery = { $inc: { loses: 1 } };
 
-			const winnerSearch = {
-				id: battle.winner_id,
-				_guild_id: battle.guild_id,
+			const winnerQuery = {
+				id: winner_id.toString(),
+				_guild_id: guild_id.toString(),
 			};
-			const winnerQuery = { $inc: { wins: 1 } };
 
-			const loser = userQuery.updateOne(loserSearch, loserQuery);
-			const winner = userQuery.updateOne(winnerSearch, winnerQuery);
+			// Update user data for winner and loser
+			const winnerUpdateQuery = [
+				{
+					$set: {
+						wins: { $ifNull: ["$wins", 0] },
+						losses: { $ifNull: ["$losses", 0] },
+					},
+				},
+				{
+					$set: {
+						wins: { $add: ["$wins", 1] },
+					},
+				},
+			];
 
-			return { loser, winner, battle };
+			const loserUpdateQuery = [
+				{
+					$set: {
+						wins: { $ifNull: ["$wins", 0] },
+						losses: { $ifNull: ["$losses", 0] },
+					},
+				},
+				{
+					$set: {
+						losses: { $add: ["$losses", 1] },
+					},
+				},
+			];
+
+			// Perform the updates with aggregation pipeline
+			try {
+				const loser = await userQuery.updateOne(
+					loserQuery,
+					loserUpdateQuery,
+					{ upsert: true },
+					true
+				);
+				const winner = await userQuery.updateOne(
+					winnerQuery,
+					winnerUpdateQuery,
+					{ upsert: true },
+					true
+				);
+
+				return { loser, winner, battle };
+			} catch (error) {
+				console.error("Error updating battle status:", error);
+			}
 		} catch (error) {
 			console.error("Error updating user statistics:", error);
 		}
@@ -159,7 +256,7 @@ class Battle {
 		return this.channel_id;
 	}
 
-	grabAllProperties(noId = false) {
+	async grabAllProperties(noId = false) {
 		let data = {};
 		for (let key in this) {
 			if (this.hasOwnProperty(key)) {
@@ -170,20 +267,79 @@ class Battle {
 					noId
 				)
 					continue;
+
+				if (key.startsWith("_")) continue;
+
 				data[key] = this[key];
 			}
 		}
-		console.log("Battle data:", data);
 		return data;
 	}
 
-	async synchronizeWithDB() {
+	async downSynchronizeWithDB() {
 		const query = new Query("pvpBattles");
 		let data = await query.readOne({ _id: this._id });
 		if (Object.keys(data).length <= 0) {
-			data = await query.insertOne(this.grabAllProperties());
+			data = await query.insertOne(await this.grabAllProperties());
+			this._id = new ObjectId(data._id);
 		}
 		return data;
+	}
+	async upSynchronizeWithDB(ignore = {}) {
+		const query = new Query("pvpBattles");
+		const grabAllProperties = await this.grabAllProperties(this);
+		if (Object.keys(ignore).length > 0) {
+			for (const keys in ignore) {
+				grabAllProperties[keys] = ignore[keys];
+			}
+		}
+		await query.updateOne({ _id: this._id }, await grabAllProperties);
+	}
+	stopBattle(reason) {
+		for (const Status in BattleStatus) {
+			if (reason === BattleStatus[Status]) {
+				this.updateStatus(BattleStatus[Status]);
+				this._end = true;
+			}
+		}
+
+		if (this._end) {
+			this._localOnly.clear();
+			this.finished_at = new Date();
+
+			this.upSynchronizeWithDB();
+		} else {
+			console.log("Battle has ended with an invalid reason!");
+		}
+	}
+
+	async createPVPMessages(channel, cards = [], user = null) {
+		channel.send("place holder text (:");
+	}
+
+	async startBattle(guild, challenger, challenged) {
+		this._realtime_updates = true;
+		this.updateStatus(BattleStatus.ON_GOING);
+		return;
+		const challengedUser = client.users.fetch(this.challenged_id);
+		const challengerUser = client.users.fetch(this.challenger_id);
+
+		const challengerChannel = client.channels.fetch(this.channelId);
+		const challengedChannel = challengedUser;
+
+		// Initialize pvp Message
+		createPVPMessages(challengerChannel);
+		createPVPMessages(challengedChannel);
+	}
+
+	async turn(fieldMessage, statusMessage, cardOnField, cardsOffField) {
+		const battleChannel = fieldMessage.channel;
+
+		const user = fieldMessage.user;
+	}
+
+	getWinner() {
+		return this.winner_id;
 	}
 }
 

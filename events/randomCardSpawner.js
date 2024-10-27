@@ -178,7 +178,7 @@ module.exports = {
 			try {
 				const guildQuery = new Query("guildDataBase");
 				guildData = await guildQuery.readOne({ id: `${guild.id}` });
-				if (!guildData) {
+				if (Object.keys(guildData).length <= 0) {
 					console.error("Guild data not found", guild.id, guild.name);
 					return;
 				}
