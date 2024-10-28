@@ -3,6 +3,9 @@ const config = require("../config.json");
 
 const { Query } = require("../databases/query.js");
 const configA = require("../config.json");
+
+const { ObjectId } = require("mongodb");
+
 const version = configA.version;
 
 module.exports = {
@@ -24,7 +27,7 @@ module.exports = {
 						.has("SEND_MESSAGES") ||
 						guild.me.permissions.has("ADMINISTRATOR"))
 			);
-
+			console.log(textChannel);
 			if (textChannel) {
 				console.log(`Found text channel: ${textChannel.name}`);
 				textChannel.send("Yo Boss, you called?");
@@ -43,9 +46,10 @@ module.exports = {
 			if (guildId) {
 				const exist = await guildQuery.readOne(checkQuery);
 
-				if (!exist) {
+				if (Object.keys(exist).length === 0) {
 					// Create the base of the creationQuery
 					const creationQuery = {
+						_id: new ObjectId(),
 						id: guildId,
 						name: guildName,
 						amountofUsers: guildUserCount,

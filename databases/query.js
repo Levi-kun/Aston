@@ -2,14 +2,14 @@ const { MongoClient } = require("mongodb");
 const fs = require("fs").promises; // Use promises-based fs functions
 const mpath = require("mpath");
 const path = require("path");
-const EventEmitter = require("events");
+
 require("dotenv").config();
 
 function isObject(value) {
 	return typeof value === "object" && value !== null;
 }
 
-class Query extends EventEmitter {
+class Query {
 	constructor(collectionName) {
 		super();
 		if (!collectionName) {
@@ -102,18 +102,18 @@ class Query extends EventEmitter {
 	async insertOne(data) {
 		await this.connect(); // Ensure DB connection
 		try {
-			await this.validateData(data); // Validate data before inserting
-
+			try {
+				await this.validateData(data); // Validate data before inserting
+			} catch (error) {
+				console.log("Validation error: ", error);
+			}
 			if (!this.checkOne(data) || !this.checkOne({ _id: data._id }))
 				return { error: "Document already exists." };
 
 			let result = await this.collection.insertOne(data);
 
 			if (result.acknowledged === true) {
-				// Emit "inserted" event
 				result = this.readOne({ _id: result.insertedId });
-
-				this.emit("inserted", result);
 			}
 			return result;
 		} finally {
@@ -160,7 +160,6 @@ class Query extends EventEmitter {
 				);
 			}
 			if (result.modifiedCount > 0 || result.upsertedCount > 0) {
-				this.emit("updated", result); // Emit "updated" event
 			}
 			return result;
 		} finally {
@@ -327,7 +326,7 @@ class Query extends EventEmitter {
 			const updateData = {
 				[channelField]: { _id: channelId, _type: channelType }, // Set channel ID and type based on channelType
 			};
-
+			console.log("here");
 			// Update the guild document with the new channel information
 			const result = await this.updateOne(
 				{ id: guildId },
