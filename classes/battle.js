@@ -314,13 +314,37 @@ class Battle {
 	}
 
 	async createPVPMessages(channel, cards = [], user = null) {
-		channel.send("place holder text (:");
+		const fieldMessage = channel.send({embed: [cards[1], cards[0]]})
+
+
+		const moveOne = new ButtonBuilder()
+		    .setCustomId("moveOne")
+			.setLabel(moves[0].name)
+		const moveTwo = new ButtonBuilder()
+		    .setCustomId("moveTwo")
+			.setLabel(moves[1].name)
+		const moveThree = new ButtonBuilder()
+		    .setCustomId("moveThree")
+			.setLabel(moves[2].name)
+		const switchMenu = new ButtonBuilder()
+		    .setCustomId("switchMenu")
+			.setLabel("Switch")
+		const inspectMenu = new ButtonBuilder()
+		    .setCustomId("inspectMenu")
+			.setLabel("Inspect")
+		const row = new ActionRowBuilder()
+		    .addComponents(moveOne, moveTwo, moveThree)
+
+
+
+		const statusMessage = channel.send({content:" ", compontent:[row]})
+
 	}
 
 	async startBattle(guild, challenger, challenged) {
 		this._realtime_updates = true;
 		this.updateStatus(BattleStatus.ON_GOING);
-		return;
+		
 		const challengedUser = client.users.fetch(this.challenged_id);
 		const challengerUser = client.users.fetch(this.challenger_id);
 
@@ -332,10 +356,18 @@ class Battle {
 		createPVPMessages(challengedChannel);
 	}
 
+	/*
+
+		Turn even is based on a single person, so turn will be called for each player
+
+	*/
+
 	async turn(fieldMessage, statusMessage, cardOnField, cardsOffField) {
 		const battleChannel = fieldMessage.channel;
-
 		const user = fieldMessage.user;
+		
+		
+		
 	}
 
 	getWinner() {
