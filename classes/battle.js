@@ -342,6 +342,12 @@ class Battle {
 	}
 
 	async startBattle(guild, challenger, challenged) {
+		/* 
+		
+		WHEN AM I ACTUALLY GOING TO FINISH THE BATTLE SEQUENCE AND HAVE A FUNCTIONING BATTLE?
+		TUNE IN NEXT TIME OF I'M SO LAZY!
+		
+		*/
 		this._realtime_updates = true;
 		this.updateStatus(BattleStatus.ON_GOING);
 		
