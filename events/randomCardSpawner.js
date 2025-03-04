@@ -5,17 +5,11 @@ const {
 	ActionRowBuilder,
 } = require("discord.js");
 const { Query } = require("../databases/query.js");
-
 const { Card } = require("../classes/cardManager.js");
 const eventEmitter = require("../src/eventManager");
 const { ObjectId } = require("mongodb");
 const version = 1; // version header
 
-/**
- * This function chooses a random rank from the given rarity object.
- * @param {Object} rarity - An object containing keys as category names and values as weights for each category.
- * @returns {String} - A string representing the chosen category name.
- */
 function chooseRank(rarity) {
 	const keys = Object.keys(rarity);
 	const weights = Object.values(rarity);
@@ -25,10 +19,11 @@ function chooseRank(rarity) {
 	for (let i = 0; i < keys.length; i++) {
 		cumulativeWeight += weights[i];
 		if (random < cumulativeWeight) {
-			return keys[i]; // Convert to integer
+			return keys[i];
 		}
 	}
 }
+
 function capitalizeFirstLetter(str) {
 	return str
 		.split(" ")
@@ -42,25 +37,78 @@ function capitalizeFirstLetter(str) {
 					);
 				}
 			}
-			return word; // If no alphabetical characters, return the word as is
+			return word;
 		})
 		.join(" ");
 }
+
 function addToPlayer(user, card) {
 	card.addOwner(user.id);
 }
 
-/**
- * Creates and sends a message with an image, card details, and a claim button to the default channel.
- *
- * @param {string} image - The URL or attachment of the card image.
- * @param {Object} card - The card object containing details like name, rarity, and power.
- * @param {import('discord.js').TextChannel} defaultChannel - The default channel where the message will be sent.
- * @param {import('discord.js').Guild} guild - The guild where the message will be sent.
- * @param {number} power - The spawned power for the card.
- *
- * @returns {Promise<import('discord.js').Message>} - The sent message.
- */
+function formatDescription(description, move, card) {
+	if (!description) return "No description available.";
+
+	let formattedDescription = description;
+
+	// Base placeholders from the move and card
+	const placeholderMap = {
+		"{name}": move.name || "Unknown",
+		"{level}": move.level || "N/A",
+		"{duration}": move.duration || "N/A",
+		"{card_name}": card?.name || "Unknown Card",
+	};
+
+	// Ensure modifiers array exists
+	const modifiers = Array.isArray(move.modifiers) ? move.modifiers : [];
+
+	// Add modifier-specific placeholders
+	modifiers.forEach((mod, index) => {
+		placeholderMap[`{type_${index}}`] = mod.type || "Unknown Type";
+		placeholderMap[`{target_${index}}`] = mod.target || "Unknown Target";
+		placeholderMap[`{flat_${index}}`] = mod.value || "N/A";
+	});
+
+	// Ensure requirementForm and nested data exist
+	if (move.requirementForm && move.requirementForm.requirement) {
+		const req = move.requirementForm.requirement;
+		placeholderMap["{requirementType}"] = req.type || "N/A";
+		placeholderMap["{requirementValue}"] = req.value || "N/A";
+
+		const reqModifiers = Array.isArray(move.requirementForm.data?.modifiers)
+			? move.requirementForm.data.modifiers
+			: [];
+
+		// Include placeholders for requirement modifiers
+		reqModifiers.forEach((mod, index) => {
+			placeholderMap[`{req_type_${index}}`] = mod.type || "Unknown Type";
+			placeholderMap[`{req_target_${index}}`] =
+				mod.target || "Unknown Target";
+			placeholderMap[`{req_flat_${index}}`] = mod.value || "N/A";
+		});
+	}
+
+	// Replace placeholders in the description
+	Object.keys(placeholderMap).forEach((placeholder) => {
+		formattedDescription = formattedDescription.replaceAll(
+			placeholder,
+			placeholderMap[placeholder]
+		);
+	});
+
+	// Append modifier details for clarity (if any modifiers exist)
+	const modifierDetails =
+		modifiers.length > 0
+			? modifiers
+					.map(
+						(mod) =>
+							`Type: ${mod.type}, Target: ${mod.target}, Value: ${mod.value}`
+					)
+					.join("\n")
+			: "No modifiers available.";
+
+	return `${formattedDescription}\n\n**Modifiers:**\n${modifierDetails}`;
+}
 
 async function messageCreater(image, card, defaultChannel) {
 	try {
@@ -71,95 +119,129 @@ async function messageCreater(image, card, defaultChannel) {
 
 		const cardEmbed = new EmbedBuilder()
 			.setColor("000000")
-			.setImage(`${image}`)
-			.setDescription(`${capitalizeFirstLetter(card.name)}`)
+			.setImage(image)
+			.setDescription(capitalizeFirstLetter(card.name || "Unknown Card"))
 			.addFields(
-				{ name: "Value", value: `${card.realPower}` }, // Display the spawned power here
-				{
-					name: "Rarity",
-					value: `${card.getRarity()}`,
-					inline: true,
-				}
+				{ name: "Value", value: `${card.realPower || "N/A"}` },
+				{ name: "Rarity", value: `${card.getRarity()}`, inline: true }
 			);
 
 		const row = new ActionRowBuilder().addComponents(claimButton);
-
-		let message = await defaultChannel.send({
+		const message = await defaultChannel.send({
 			embeds: [cardEmbed],
 			components: [row],
 		});
 
-		const collectorFilter = (i) =>
-			i.customId === "next" || i.customId === "Claim";
 		const collector = message.createMessageComponentCollector({
-			filter: collectorFilter,
 			time: 300_000,
 		});
 
 		collector.on("collect", async (i) => {
-			if (i.customId === "Claim") {
-				try {
+			try {
+				await i.deferUpdate(); // Acknowledge immediately
+
+				if (i.customId === "Claim") {
 					addToPlayer(i.user, card);
-					await message.channel.send(
-						`${
+
+					if (
+						!Array.isArray(card._move_sets) ||
+						card._move_sets.length === 0
+					) {
+						console.error("No valid moves found for card:", card);
+						return;
+					}
+
+					// Create buttons for moves (max 5 buttons per row)
+					const moveButtons = card._move_sets.map((move, index) =>
+						new ButtonBuilder()
+							.setCustomId(`move_${index}`)
+							.setLabel(`${move.name || "Unknown Move"}`)
+							.setStyle(ButtonStyle.Secondary)
+					);
+
+					const movesRow = new ActionRowBuilder().addComponents(
+						...moveButtons.slice(0, 5)
+					);
+
+					// Edit the message to show move buttons
+					await message.edit({
+						content: `${
 							i.user.username
 						}, congrats on obtaining: ${capitalizeFirstLetter(
 							card.name
-						)}`
-					);
-				} catch (err) {
-					console.error(`Error in addToPlayer: ${err.message}`);
-					await message.channel.send(
-						`Sorry ${i.user.username}, there was an error claiming the card. Please try again later.`
-					);
+						)}`,
+						components: [movesRow],
+					});
 				}
-				collector.stop();
+
+				// If a move button is pressed
+				if (i.customId.startsWith("move_")) {
+					const moveIndex = parseInt(i.customId.split("_")[1], 10);
+					const move = card._move_sets[moveIndex];
+
+					if (!move) {
+						console.error(
+							"Invalid move index:",
+							moveIndex,
+							"for card:",
+							card
+						);
+						return;
+					}
+
+					// Format description and handle placeholders
+					const formattedDescription = formatDescription(
+						move.description,
+						move.modifiers || [],
+						card
+					);
+
+					// Send a new message with the move details
+					await i.followUp({
+						content: `**Move:** ${move.name}\n**Type:** ${
+							move.type
+						}\n**Power:** ${
+							move.modifiers
+								?.map((mod) => mod.value)
+								.join(", ") || "N/A"
+						}\n**Effect:** ${formattedDescription}`,
+						ephemeral: true, // Only visible to the user
+					});
+				}
+			} catch (innerErr) {
+				console.error(
+					"Error during collector interaction:",
+					innerErr.message,
+					innerErr.stack
+				);
 			}
 		});
 
-		collector.on("end", async (collected, reason) => {
-			try {
-				console.log(
-					`Collected ${collected.size} interactions, ${reason}`
-				);
-
-				if (reason === "time") {
-					await message.edit({
-						content: `${card.name} :eyes:`,
-						components: [],
-						embeds: [],
-					});
-				} else {
-					await message.edit({
-						components: [],
-					});
-				}
-			} catch (err) {
-				console.error(`Error in collector.on('end'): ${err.message}`);
-				throw err;
+		collector.on("end", async (_, reason) => {
+			if (reason === "time") {
+				await message.edit({
+					content: `Boss, ${card.name} ran away!`,
+					components: [],
+				});
 			}
 		});
 	} catch (err) {
-		console.error(`Error in messageCreater: ${err.message}`);
+		console.error("Error in messageCreater:", err.message, err.stack);
 		throw err;
 	}
 }
+
 module.exports = {
 	name: "spawnInCard",
 	async execute(guild) {
 		try {
 			const query = new Query("animeCardList");
-
-			// Fetch rarity settings
 			const settingsQuery = new Query("settings");
 			const rarity_Settings = await settingsQuery.readOne({
 				rarity_Settings: { $exists: true },
 			});
 
-			// Choose rank
 			const cardType = chooseRank(rarity_Settings.rarity_Settings);
-
-			// Aggregate the card
 			let card = await query.aggregate(1, {
 				rarity: parseInt(cardType, 10),
 			});
@@ -169,59 +251,25 @@ module.exports = {
 				return;
 			}
 
-			// Extract the first card from the results
 			card = card[0].lv;
-			a = await new Card(card).convertToOwnedCard(guild.id);
-
-			// Get the default channel ID
-			let guildData;
-			try {
-				const guildQuery = new Query("guildDataBase");
-				guildData = await guildQuery.readOne({ id: `${guild.id}` });
-				if (Object.keys(guildData).length <= 0) {
-					console.error("Guild data not found", guild.id, guild.name);
-					return;
-				}
-			} catch (err) {
-				console.error(`Error in fetching guild data: ${err.message}`);
-				return;
-			}
-
-			const defaultChannelId = guildData.channelInformation.default._id;
-			// Fetch card photos
-			let photos;
-			try {
-				const cardIdQuery = { card_id: new ObjectId(card._id) };
-				const photoQuery = new Query("animeCardPhotos");
-				photos = await photoQuery.readMany(cardIdQuery);
-				if (!photos || photos.length === 0) {
-					console.error(`No images found for card: ${card._id}`);
-					return;
-				}
-			} catch (err) {
-				console.error(`Error in fetching card photos: ${err.message}`);
-				return;
-			}
-
-			const image = photos.map((photo) => photo.attachment);
-			const link = photos.map(
-				(photo) => photo.linkAttachment || "@asp_levi"
+			const adjustedCard = await new Card(card).convertToOwnedCard(
+				guild.id
 			);
 
-			// Send messages to the default channel
+			const guildQuery = new Query("guildDataBase");
+			const guildData = await guildQuery.readOne({ id: `${guild.id}` });
+
+			const defaultChannelId = guildData.channelInformation.default._id;
+			const photoQuery = new Query("animeCardPhotos");
+			const photos = await photoQuery.readMany({
+				card_id: new ObjectId(card._id),
+			});
+
+			const image = photos.map((photo) => photo.attachment);
+
 			const defaultChannel = guild.channels.cache.get(defaultChannelId);
 			if (defaultChannel) {
-				try {
-					await messageCreater(
-						image[0],
-						a,
-						defaultChannel,
-						link[0],
-						guild
-					); // Pass the spawned power to the message creator
-				} catch (err) {
-					console.error(`Error in messageCreater: ${err.message}`);
-				}
+				await messageCreater(image[0], adjustedCard, defaultChannel);
 			} else {
 				console.error("Default channel not found");
 			}

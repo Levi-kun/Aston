@@ -11,7 +11,6 @@ function isObject(value) {
 
 class Query {
 	constructor(collectionName) {
-		super();
 		if (!collectionName) {
 			console.error("Collection name is required.");
 		}

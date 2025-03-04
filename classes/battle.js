@@ -21,35 +21,29 @@ const BattleStatus = Object.freeze({
 });
 
 const moveTypes = Object.freeze({
-	DMG: "DMG",
-	SPECIAL: "SPECIAL",
 	BUFF: "BUFF",
 	DEBUFF: "DEBUFF",
-	PASSIVE: "PASSIVE",
 	FOCUS: "FOCUS",
+	SPECIAL: "SPECIAL",
 });
 
-function grabMostRecentGame(array) {
-	let mostRecent = null;
-	for (const game of array) {
-		if (mostRecent === null || game.created_at > mostRecent.created_at) {
-			mostRecent = game;
-		}
-	}
-	return mostRecent;
-}
+// Queries for the new collections
+const pvpBattleQuery = new Query("pvpBattles");
+const pvpBattleTurnQuery = new Query("pvpBattleTurns");
+const pvpBattleTelemetryQuery = new Query("pvpBattleTelemetry");
 
-const pvpQ = new Query("pvpBattles");
 class Battle {
 	constructor() {
 		this._id;
 		this.guild_id;
-
 		this.challenger_id;
 		this.challenged_id;
+		this.status = BattleStatus.PENDING;
+		this.created_at = new Date();
+		this.channel_id;
 
-		this.status;
-		this.created_at;
+		this.cards = [];
+		this.current_turn = 0;
 
 		this._localOnly = new Set();
 		this._realtime_updates = false;
@@ -58,294 +52,136 @@ class Battle {
 			set: async (target, prop, value) => {
 				target[prop] = value;
 				if (!this._realtime_updates) return true;
-				if (prop.startsWith("_") && !prop === "_id") return true;
-
+				if (prop.startsWith("_") && prop !== "_id") return true;
 				if (prop === "_realtime_updates") return true;
 
-				const guild = client.guilds.cache.get(this.guild_id);
-				if (!guild) return;
-				const document = await pvpQ.updateOne(
-					{ _id: this._id },
-					{ [prop]: value }
-				);
-
+				await this.updateBattle({ [prop]: value });
 				return true;
 			},
 		});
 	}
 
-	addid(id) {
-		this._id = id;
-		return this;
+	// Updates the battle record in the pvpBattles collection
+	async updateBattle(update) {
+		if (!this._id) return;
+		await pvpBattleQuery.updateOne({ _id: this._id }, { $set: update });
 	}
 
-	addguild_id(guild_id) {
-		this.guild_id = guild_id;
-		return this;
+	// Initializes a new battle in the pvpBattles collection
+	async createBattle() {
+		const battleData = {
+			guild_id: this.guild_id,
+			challenger_id: this.challenger_id,
+			challenged_id: this.challenged_id,
+			status: this.status,
+			created_at: this.created_at,
+			channel_id: this.channel_id,
+			cards: this.cards.map((card) => card.toObject()), // Use Card class
+			current_turn: this.current_turn,
+		};
+
+		const result = await pvpBattleQuery.insertOne(battleData);
+		this._id = result.insertedId;
+
+		await this.initializeTelemetry();
 	}
 
-	addchallenger_id(challenger_id) {
-		this.challenger_id = challenger_id;
-		return this;
+	// Initializes a telemetry record in the pvpBattleTelemetry collection
+	async initializeTelemetry() {
+		const telemetryData = {
+			battle_id: this._id,
+			total_damage: 0,
+			total_healing: 0,
+			move_usage: {},
+			card_switches: 0,
+			focus_completed: 0,
+			special_triggered: 0,
+		};
+
+		await pvpBattleTelemetryQuery.insertOne(telemetryData);
 	}
 
-	addchallenged_id(challenged_id) {
-		this.challenged_id = challenged_id;
-		return this;
+	// Records a new turn in the pvpBattleTurns collection
+	async recordTurn(actionData) {
+		const turnData = {
+			battle_id: this._id,
+			turn_number: ++this.current_turn,
+			action: actionData,
+			timestamp: new Date(),
+		};
+
+		await pvpBattleTurnQuery.insertOne(turnData);
+		await this.updateBattle({ current_turn: this.current_turn });
 	}
 
-	addcreated_at(created_at = new Date()) {
-		this.created_at = created_at;
-		return this;
+	// Updates the telemetry record
+	async updateTelemetry(updateData) {
+		await pvpBattleTelemetryQuery.updateOne(
+			{ battle_id: this._id },
+			{ $inc: updateData }
+		);
 	}
 
-	addchallenger_cards(cards) {
-		this.challenger_cards = cards.map((card) => new Card(card));
-		return this;
+	// Adds a card using the Card class
+	async addCard(cardData, isChallenger) {
+		const card = await Card.createFromData(cardData);
+		card.isChallenger = isChallenger;
+		this.cards.push(card);
 	}
 
-	addchallenged_cards(cards) {
-		this.challenged_cards = cards.map((card) => new Card(card));
-		return this;
+	// Handles a player forfeiting the battle
+	async forfeit(loser_id) {
+		const winner_id =
+			this.challenger_id === loser_id
+				? this.challenged_id
+				: this.challenger_id;
+
+		this.status = BattleStatus.FORFEIT;
+
+		await this.updateBattle({
+			status: BattleStatus.FORFEIT,
+			winner_id: winner_id,
+			loser_id: loser_id,
+			finished_at: new Date(),
+		});
+
+		await this.updateTelemetry({ card_switches: 1 });
 	}
 
-	addstatus(status) {
-		this.status = status;
-		return this;
+	// Starts the battle and updates the status
+	async startBattle() {
+		this.status = BattleStatus.ON_GOING;
+		await this.updateBattle({ status: BattleStatus.ON_GOING });
 	}
 
-	addwinner_id(winner_id) {
-		this.winner_id = winner_id;
-		return this;
-	}
+	// Applies a move using the Card class
+	async applyMove(userId, move) {
+		const isChallenger = userId === this.challenger_id;
+		const targetId = isChallenger ? this.challenged_id : this.challenger_id;
 
-	addloser_id(loser_id) {
-		this.loser_id = loser_id;
-		return this;
-	}
+		let targetCard = this.cards.find(
+			(c) => c.isChallenger !== isChallenger
+		);
+		let userCard = this.cards.find((c) => c.isChallenger === isChallenger);
 
-	addchannel_id(channel_id) {
-		this.channel_id = channel_id;
-		return this;
-	}
+		await userCard.applyMove(move, targetCard);
 
-	updateStatus(status) {
-		this.status = status;
-	}
+		await this.updateTelemetry({
+			total_damage: move.type === "DEBUFF" ? move.value : 0,
+			focus_completed: move.type === "FOCUS" ? 1 : 0,
+			special_triggered: move.type === "SPECIAL" ? 1 : 0,
+		});
 
-	setLocalOnly(data) {}
+		await this.recordTurn({
+			userId,
+			move,
+			targetId,
+			result: targetCard,
+		});
 
-	static createNew(data) {
-		const battle = new Battle();
-
-		battle
-			.addguild_id(data.guild_id)
-			.addchallenged_id(data.challenged_id)
-			.addchallenger_id(data.challenger_id)
-			.addcreated_at(data.created_at)
-			.addstatus(data.status)
-			.addchannel_id(data.channel_id);
-
-		return battle;
-	}
-
-	static createOld(data) {
-		const battle = new Battle();
-		for (const key in data) {
-			battle[key] = data[key];
-		}
-
-		return battle;
-	}
-
-	static async forfeit(guild_id, loser_id) {
-		try {
-			const query = {
-				guild_id: guild_id,
-				$or: [{ challenged_id: loser_id }, { challenger_id: loser_id }],
-			};
-			const userQuery = new Query("userDataBase");
-			const pvpQuery = new Query("pvpBattles");
-
-			const data = await pvpQuery.readOne(query);
-
-			const battle = Battle.createOld(data);
-
-			const winner_id =
-				battle.challenger_id === loser_id
-					? battle.challenged_id
-					: battle.challenger_id;
-
-			battle.status = BattleStatus.FORFEIT;
-			battle._localOnly.clear();
-			battle.winner_id = winner_id;
-			battle.loser_id = loser_id;
-			battle.finished_at = new Date();
-			let checker = await pvpQuery.readMany(battle.grabAllProperties());
-			checker = grabMostRecentGame(checker);
-
-			if (checker.status !== BattleStatus.ON_GOING) {
-				return { Error: 1 };
-			}
-			await battle.upSynchronizeWithDB(); // Ensure this is awaited
-
-			const loserQuery = {
-				id: loser_id.toString(),
-				_guild_id: guild_id.toString(),
-			};
-
-			const winnerQuery = {
-				id: winner_id.toString(),
-				_guild_id: guild_id.toString(),
-			};
-
-			// Update user data for winner and loser
-			const winnerUpdateQuery = [
-				{
-					$set: {
-						wins: { $ifNull: ["$wins", 0] },
-						losses: { $ifNull: ["$losses", 0] },
-					},
-				},
-				{
-					$set: {
-						wins: { $add: ["$wins", 1] },
-					},
-				},
-			];
-
-			const loserUpdateQuery = [
-				{
-					$set: {
-						wins: { $ifNull: ["$wins", 0] },
-						losses: { $ifNull: ["$losses", 0] },
-					},
-				},
-				{
-					$set: {
-						losses: { $add: ["$losses", 1] },
-					},
-				},
-			];
-
-			// Perform the updates with aggregation pipeline
-			try {
-				const loser = await userQuery.updateOne(
-					loserQuery,
-					loserUpdateQuery,
-					{ upsert: true },
-					true
-				);
-				const winner = await userQuery.updateOne(
-					winnerQuery,
-					winnerUpdateQuery,
-					{ upsert: true },
-					true
-				);
-
-				return { loser, winner, battle };
-			} catch (error) {
-				console.error("Error updating battle status:", error);
-			}
-		} catch (error) {
-			console.error("Error updating user statistics:", error);
-		}
-	}
-
-	getBattleChannel() {
-		return this.channel_id;
-	}
-
-	async grabAllProperties(noId = false) {
-		let data = {};
-		for (let key in this) {
-			if (this.hasOwnProperty(key)) {
-				if (
-					(key === "_id" ||
-						key === "created_at" ||
-						key === "channel_id") &&
-					noId
-				)
-					continue;
-
-				if (key.startsWith("_")) continue;
-
-				data[key] = this[key];
-			}
-		}
-		return data;
-	}
-
-	async downSynchronizeWithDB() {
-		const query = new Query("pvpBattles");
-		let data = await query.readOne({ _id: this._id });
-		if (Object.keys(data).length <= 0) {
-			data = await query.insertOne(await this.grabAllProperties());
-			this._id = new ObjectId(data._id);
-		}
-		return data;
-	}
-	async upSynchronizeWithDB(ignore = {}) {
-		const query = new Query("pvpBattles");
-		const grabAllProperties = await this.grabAllProperties(this);
-		if (Object.keys(ignore).length > 0) {
-			for (const keys in ignore) {
-				grabAllProperties[keys] = ignore[keys];
-			}
-		}
-		await query.updateOne({ _id: this._id }, await grabAllProperties);
-	}
-	stopBattle(reason) {
-		for (const Status in BattleStatus) {
-			if (reason === BattleStatus[Status]) {
-				this.updateStatus(BattleStatus[Status]);
-				this._end = true;
-			}
-		}
-
-		if (this._end) {
-			this._localOnly.clear();
-			this.finished_at = new Date();
-
-			this.upSynchronizeWithDB();
-		} else {
-			console.log("Battle has ended with an invalid reason!");
-		}
-	}
-
-	async createPVPMessages(channel, cards = [], user = null) {
-		channel.send("place holder text (:");
-	}
-
-	async startBattle(guild, challenger, challenged) {
-		/* 
-		
-		WHEN AM I ACTUALLY GOING TO FINISH THE BATTLE SEQUENCE AND HAVE A FUNCTIONING BATTLE?
-		TUNE IN NEXT TIME OF I'M SO LAZY!
-		
-		*/
-		this._realtime_updates = true;
-		this.updateStatus(BattleStatus.ON_GOING);
-		return;
-		const challengedUser = client.users.fetch(this.challenged_id);
-		const challengerUser = client.users.fetch(this.challenger_id);
-
-		const challengerChannel = client.channels.fetch(this.channelId);
-		const challengedChannel = challengedUser;
-
-		// Initialize pvp Message
-		createPVPMessages(challengerChannel);
-		createPVPMessages(challengedChannel);
-	}
-
-	async turn(fieldMessage, statusMessage, cardOnField, cardsOffField) {
-		const battleChannel = fieldMessage.channel;
-
-		const user = fieldMessage.user;
-	}
-
-	getWinner() {
-		return this.winner_id;
+		await this.updateBattle({
+			cards: this.cards.map((card) => card.toObject()),
+		});
 	}
 }
 

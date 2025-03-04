@@ -7,7 +7,7 @@ const positionMapping = {
 };
 
 // Your NBA API key (replace with your actual key)
-// const { balldontlie, year } = require("../../apiKeys.json").nba;
+const { balldontlie, year } = require("../../apiKeys.json").nba;
 
 module.exports = {
 	cooldown: 45,

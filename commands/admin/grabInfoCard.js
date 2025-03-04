@@ -29,8 +29,7 @@ module.exports = {
 		try {
 			// Retrieve data for the specified card name
 			const cardData = await query.readOne({ name: cardName });
-
-			if (!cardData) {
+			if (Object.keys(cardData).length === 0) {
 				await interaction.reply(
 					`No data found for card "${cardName}".`
 				);
@@ -59,7 +58,7 @@ module.exports = {
 				});
 			}
 			// Retrieve associated photos
-			const photoQuery = new Query("animeCardPictures"); // Collection for photos
+			const photoQuery = new Query("animeCardPhotos"); // Collection for photos
 			const photos = await photoQuery.readOne({ card_id: cardData._id });
 			let photoUrls;
 			if (Object.keys(photos).length == 0) {

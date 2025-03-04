@@ -11,7 +11,6 @@ const pictureQuery = new Query("animeCardPhotos");
 const { ObjectId } = require("mongodb");
 // Define move types as constants
 const moveTypes = Object.freeze({
-	DMG: "DMG",
 	SPECIAL: "SPECIAL",
 	BUFF: "BUFF",
 	DEBUFF: "DEBUFF",

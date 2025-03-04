@@ -14,109 +14,162 @@ const pvpBattlesSchema = {
 			guild_id: { bsonType: "string" },
 			challenger_id: { bsonType: "string" },
 			challenged_id: { bsonType: "string" },
-			challenger_cards: {
+			cards: {
 				bsonType: "array",
 				items: {
 					bsonType: "object",
-					required: ["card_id", "name", "power", "health"],
+					required: [
+						"card_id",
+						"name",
+						"power",
+						"health",
+						"isChallenger",
+					],
 					properties: {
 						_id: { bsonType: "objectId" },
 						card_id: { bsonType: "objectId" },
 						name: { bsonType: "string" },
 						power: { bsonType: "int" }, // Real-time power during battle
-						health: { bsonType: "int" }, // Real-time health  during battle
+						health: { bsonType: "int" }, // Real-time health during battle
 						rank: { bsonType: "string" },
 						version: { bsonType: "string" },
+						role: {
+							bsonType: "string",
+							enum: ["Attack", "Support"],
+							description:
+								"Defines whether the card is an Attack or Support card.",
+						},
+						isChallenger: {
+							bsonType: "bool",
+							description:
+								"True if the card belongs to the challenger, false otherwise.",
+						},
 						move_sets: {
 							bsonType: "array",
 							items: {
 								bsonType: "object",
+								required: ["move_id", "move_name", "type"],
 								properties: {
+									move_id: { bsonType: "objectId" },
 									move_name: { bsonType: "string" },
-									move_power: { bsonType: "int" },
+									type: {
+										bsonType: "string",
+										enum: [
+											"BUFF",
+											"DEBUFF",
+											"FOCUS",
+											"SPECIAL",
+										],
+										description:
+											"Type of move being performed.",
+									},
+									targetAttribute: {
+										bsonType: "string",
+										description:
+											"The stat this move affects.",
+									},
+									value: { bsonType: "int" },
+									duration: {
+										bsonType: "int",
+										description:
+											"Turns this move remains active.",
+									},
+									focusTurns: {
+										bsonType: "int",
+										description:
+											"Tracks how many turns the FOCUS move has charged.",
+									},
+									requirementForm: {
+										bsonType: "object",
+										description:
+											"Special condition for SPECIAL moves.",
+										properties: {
+											requirement: {
+												bsonType: "object",
+												properties: {
+													type: {
+														bsonType: "string",
+													},
+													value: { bsonType: "int" },
+												},
+											},
+											newMove: {
+												bsonType: "object",
+												properties: {
+													move_name: {
+														bsonType: "string",
+													},
+													modifiers: {
+														bsonType: "array",
+														items: {
+															bsonType: "object",
+															properties: {
+																type: {
+																	bsonType:
+																		"string",
+																},
+																target: {
+																	bsonType:
+																		"string",
+																},
+																value: {
+																	bsonType:
+																		"int",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
 								},
 							},
 						},
-						buffs: {
-							bsonType: "array",
-							items: {
-								bsonType: "object",
-								properties: {
-									sourceCard: { bsonType: "string" }, // Card applying the buff
-									targetAttribute: { bsonType: "string" }, // Attribute affected
-									value: { bsonType: "int" }, // Amount of buff
-									duration: { bsonType: "int" }, // Turns the buff lasts
-									appliedAt: { bsonType: "date" }, // Timestamp of application
-								},
-							},
-						},
-						debuffs: {
+						effects: {
 							bsonType: "array",
 							items: {
 								bsonType: "object",
 								properties: {
 									sourceCard: { bsonType: "string" },
+									type: {
+										bsonType: "string",
+										enum: ["BUFF", "DEBUFF"],
+									},
 									targetAttribute: { bsonType: "string" },
 									value: { bsonType: "int" },
 									duration: { bsonType: "int" },
 									appliedAt: { bsonType: "date" },
+								},
+							},
+						},
+						focusProgress: {
+							bsonType: "array",
+							items: {
+								bsonType: "object",
+								properties: {
+									move_id: { bsonType: "objectId" },
+									turnsLeft: { bsonType: "int" },
+									target: { bsonType: "string" },
 								},
 							},
 						},
 					},
 				},
 			},
-			challenged_cards: {
-				bsonType: "array",
-				items: {
-					bsonType: "object",
-					required: ["card_id", "name", "power", "health"],
-					properties: {
-						_id: { bsonType: "objectId" },
-						card_id: { bsonType: "objectId" },
-						name: { bsonType: "string" },
-						power: { bsonType: "int" },
-						health: { bsonType: "int" },
-						rank: { bsonType: "string" },
-						version: { bsonType: "string" },
-						move_sets: {
-							bsonType: "array",
-							items: {
-								bsonType: "object",
-								properties: {
-									move_id: { bsonType: "objectId" },
-									move_name: { bsonType: "string" },
-									move_power: { bsonType: "int" },
-								},
-							},
-						},
-						buffs: {
-							bsonType: "array",
-							items: {
-								bsonType: "object",
-								properties: {
-									sourceCard: { bsonType: "string" },
-									targetAttribute: { bsonType: "string" },
-									value: { bsonType: "int" },
-									duration: { bsonType: "int" },
-									appliedAt: { bsonType: "date" },
-								},
-							},
-						},
-						debuffs: {
-							bsonType: "array",
-							items: {
-								bsonType: "object",
-								properties: {
-									sourceCard: { bsonType: "string" },
-									targetAttribute: { bsonType: "string" },
-									value: { bsonType: "int" },
-									duration: { bsonType: "int" },
-									appliedAt: { bsonType: "date" },
-								},
-							},
-						},
-					},
+			active_card: {
+				bsonType: "object",
+				properties: {
+					card_id: { bsonType: "objectId" },
+					health: { bsonType: "int" },
+				},
+			},
+			soul_card: {
+				bsonType: "object",
+				required: ["card_id", "health"],
+				properties: {
+					card_id: { bsonType: "objectId" },
+					health: { bsonType: "int" },
 				},
 			},
 			channel_id: {

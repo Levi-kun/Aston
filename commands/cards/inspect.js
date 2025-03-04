@@ -27,170 +27,127 @@ module.exports = {
 	async execute(interaction) {
 		const cardName = interaction.options.getString("name")?.toLowerCase();
 		const user = interaction.options.getUser("user") || interaction.user;
-
 		const ownedCardsQuery = new Query("ownedCards");
 
-		try {
-			if (!cardName) {
-				// **1. Fetch All Cards Owned by the User Using Card Class**
-				const userCards = await ownedCardsQuery.aggregate({
-					player_id: user.id,
-				});
+		if (!cardName) {
+			const userCards = await ownedCardsQuery.aggregate({
+				player_id: user.id,
+			});
 
-				if (!userCards || userCards.length === 0) {
-					return interaction.reply({
-						content: `${user.username} does not own any cards.`,
+			if (!userCards || userCards.length === 0) {
+				return await interaction.reply({
+					content: `${user.username} does not own any cards.`,
+					ephemeral: true,
+				});
+			}
+
+			let currentIndex = 0;
+
+			const generateEmbed = (card, index, total) => {
+				const firstPhoto =
+					card._photoUrls && card._photoUrls.length > 0
+						? card._photoUrls
+						: "https://example.com/default-card-image.png";
+				return new EmbedBuilder()
+					.setTitle(`Card: ${card.name}`)
+					.setDescription(
+						`**ID:** ${card.card_id}\n**Rank:** ${card.rank}\n**Power:** ${card.realPower}`
+					)
+					.setImage(firstPhoto)
+					.setFooter({ text: `Card ${index + 1} of ${total}` });
+			};
+
+			const ownedCardObject = new OwnedCard().buildsWithData(
+				userCards[currentIndex].lv
+			);
+			const embed = generateEmbed(
+				ownedCardObject,
+				currentIndex,
+				userCards.length
+			);
+
+			const leftButton = new ButtonBuilder()
+				.setCustomId("left")
+				.setLabel("◀️")
+				.setStyle(ButtonStyle.Primary)
+				.setDisabled(true);
+
+			const rightButton = new ButtonBuilder()
+				.setCustomId("right")
+				.setLabel("▶️")
+				.setStyle(ButtonStyle.Primary)
+				.setDisabled(userCards.length === 1);
+
+			const actionRow = new ActionRowBuilder().addComponents(
+				leftButton,
+				rightButton
+			);
+
+			const initialMessage = await interaction.reply({
+				embeds: [embed],
+				components: [actionRow],
+				withResponse: true,
+			});
+
+			const message =
+				initialMessage.resource?.message ||
+				(await interaction.fetchReply());
+
+			const collector = message.createMessageComponentCollector({
+				componentType: ComponentType.Button,
+				time: 600000,
+			});
+
+			collector.on("collect", async (i) => {
+				if (i.user.id !== interaction.user.id) {
+					return i.reply({
+						content: "You cannot interact with these buttons.",
 						ephemeral: true,
 					});
 				}
 
-				let currentIndex = 0;
+				if (i.customId === "left" && currentIndex > 0) {
+					currentIndex--;
+				} else if (
+					i.customId === "right" &&
+					currentIndex < userCards.length - 1
+				) {
+					currentIndex++;
+				}
 
-				// **2. Generate Embeds for Each Card Including Images**
-				const generateEmbed = (card, index, total) => {
-					const firstPhoto =
-						card._photoUrls && card._photoUrls.length > 0
-							? card._photoUrls
-							: "https://example.com/default-card-image.png"; // Replace with your default image URL
-
-					return new EmbedBuilder()
-						.setTitle(`Card: ${card.name}`)
-						.setDescription(
-							`**ID:** ${card.card_id}\n**Rank:** ${card.rank}\n**Power:** ${card.realPower}`
-						)
-						.setImage(firstPhoto) // Display the first photo
-						.setFooter({ text: `Card ${index + 1} of ${total}` });
-				};
-				const ownedCardObject = new OwnedCard().buildsWithData(
+				const newOwnedCardObject = new OwnedCard().buildsWithData(
 					userCards[currentIndex].lv
 				);
-				const embed = generateEmbed(
-					ownedCardObject,
+				const newEmbed = generateEmbed(
+					newOwnedCardObject,
 					currentIndex,
 					userCards.length
 				);
 
-				// **3. Create Navigation Buttons**
-				const leftButton = new ButtonBuilder()
-					.setCustomId("left")
-					.setLabel("◀️")
-					.setStyle(ButtonStyle.Primary)
-					.setDisabled(true);
+				leftButton.setDisabled(currentIndex === 0);
+				rightButton.setDisabled(currentIndex === userCards.length - 1);
 
-				const rightButton = new ButtonBuilder()
-					.setCustomId("right")
-					.setLabel("▶️")
-					.setStyle(ButtonStyle.Primary)
-					.setDisabled(userCards.length === 1);
-
-				const actionRow = new ActionRowBuilder().addComponents(
+				const newActionRow = new ActionRowBuilder().addComponents(
 					leftButton,
 					rightButton
 				);
 
-				// **4. Send Initial Embed with Buttons**
-				const message = await interaction.reply({
-					embeds: [embed],
-					components: [actionRow],
-					fetchReply: true,
+				await i.update({
+					embeds: [newEmbed],
+					components: [newActionRow],
 				});
+			});
 
-				// **5. Handle Button Interactions**
-				const collector = message.createMessageComponentCollector({
-					componentType: ComponentType.Button,
-					time: 600000, // 10 minutes
-				});
-
-				collector.on("collect", async (i) => {
-					if (i.user.id !== interaction.user.id) {
-						return i.reply({
-							content: "You cannot interact with these buttons.",
-							ephemeral: true,
-						});
-					}
-
-					if (i.customId === "left") {
-						currentIndex =
-							currentIndex > 0 ? currentIndex - 1 : currentIndex;
-					} else if (i.customId === "right") {
-						currentIndex =
-							currentIndex < userCards.length - 1
-								? currentIndex + 1
-								: currentIndex;
-					}
-					const newownedCardObject = new OwnedCard().buildsWithData(
-						userCards[currentIndex].lv
-					);
-					// **6. Generate the New Embed with Updated Index**
-					const newEmbed = generateEmbed(
-						newownedCardObject,
-						currentIndex,
-						userCards.length
-					);
-
-					// **7. Update Button States**
-					leftButton.setDisabled(currentIndex === 0);
-					rightButton.setDisabled(
-						currentIndex === userCards.length - 1
-					);
-
-					const newActionRow = new ActionRowBuilder().addComponents(
-						leftButton,
-						rightButton
-					);
-
-					// **8. Edit the Original Message with the New Embed and Updated Buttons**
-					await i.update({
-						embeds: [newEmbed],
-						components: [newActionRow],
-					});
-				});
-
-				collector.on("end", () => {
-					// **9. Disable Buttons After Collector Ends**
-					leftButton.setDisabled(true);
-					rightButton.setDisabled(true);
-					const disabledRow = new ActionRowBuilder().addComponents(
-						leftButton,
-						rightButton
-					);
-					message
-						.edit({ components: [disabledRow] })
-						.catch(console.error);
-				});
-			} else {
-				// **10. Existing Card Inspection Logic with Specific Card Name**
-
-				const card = user
-					? await ownedCardsQuery.readOne({
-							player_id: user.id,
-							name: cardName,
-					  })
-					: await Card.getCardByParam({ name: cardName });
-
-				if (!card) {
-					return interaction.reply({
-						content: `${user.username} does not own any cards named "${cardName}".`,
-						ephemeral: true,
-					});
-				}
-
-				const embed = new EmbedBuilder()
-					.setTitle(`Card: ${card.name}`)
-					.setDescription(
-						`**ID:** ${card.card_id}\n**Rank:** ${rarityDesignater(
-							card.rank
-						)}\n**Power:** ${card.realPower}`
-					)
-					.setImage(card.grabPhotosForCard());
-
-				await interaction.reply({ embeds: [embed], ephemeral: true });
-			}
-		} catch (e) {
-			console.error(e);
-			return interaction.reply({
-				content: "An error occurred while trying to inspect the card.",
-				ephemeral: true,
+			collector.on("end", async () => {
+				leftButton.setDisabled(true);
+				rightButton.setDisabled(true);
+				const disabledRow = new ActionRowBuilder().addComponents(
+					leftButton,
+					rightButton
+				);
+				await message
+					.edit({ components: [disabledRow] })
+					.catch(console.error);
 			});
 		}
 	},
