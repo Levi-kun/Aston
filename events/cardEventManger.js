@@ -25,6 +25,12 @@ async function getAmountPerServer(guildId) {
 	}
 }
 
+async function resetDailyClaims() {
+	const gainLimitQuery = new Query("gainLimitData");
+	await gainLimitQuery.deleteMany({});
+	console.log("Daily claim limits reset.");
+}
+
 function scheduleJobsForGuild(guildId, numJobs) {
 	const scheduledJobs = Array.from({ length: numJobs }, () =>
 		schedule.scheduleJob(getRandomTime(), () =>
@@ -57,6 +63,7 @@ function scheduleDailyReset(client) {
 	schedule.scheduleJob("0 0 * * *", async () => {
 		client.guilds.cache.forEach(async (guild) => {
 			await scheduleRandomJobsForServer(guild);
+			await resetDailyClaims();
 		});
 	});
 }

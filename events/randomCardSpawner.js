@@ -24,6 +24,48 @@ function chooseRank(rarity) {
 	}
 }
 
+async function canClaimMore(userId, guildId) {
+	const gainLimitQuery = new Query("gainLimitData");
+	const guildQuery = new Query("guildDataBase");
+
+	const guild = await guildQuery.readOne({ id: `${guildId}` });
+	if (!guild) {
+		console.log("Guild not found");
+		return false;
+	} else if (typeof guild.gainADAY !== "number") {
+		console.log("Invalid gainADAY value");
+		return false;
+	}
+
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+
+	const claimsToday = await gainLimitQuery.countDocuments({
+		user_id: userId, // String, no parseInt
+		guild_id: guildId,
+		date: { $gte: today },
+	});
+
+	return claimsToday < guild.gainADAY;
+}
+
+async function recordClaim(userId, guildId) {
+	const gainLimitQuery = new Query("gainLimitData");
+	try {
+		const canClaim = await canClaimMore(userId, guildId);
+		if (!canClaim) return false;
+		await gainLimitQuery.insertOne({
+			user_id: userId, // String, no parseInt
+			guild_id: guildId,
+			date: new Date(),
+		});
+		return true;
+	} catch (error) {
+		console.error("Error recording claim:", error);
+		return false;
+	}
+}
+
 function capitalizeFirstLetter(str) {
 	return str
 		.split(" ")
@@ -51,63 +93,51 @@ function formatDescription(description, move, card) {
 
 	let formattedDescription = description;
 
-	// Base placeholders from the move and card
-	const placeholderMap = {
-		"{name}": move.name || "Unknown",
-		"{level}": move.level || "N/A",
-		"{duration}": move.duration || "N/A",
-		"{card_name}": card?.name || "Unknown Card",
-	};
-
-	// Ensure modifiers array exists
-	const modifiers = Array.isArray(move.modifiers) ? move.modifiers : [];
-
-	// Add modifier-specific placeholders
-	modifiers.forEach((mod, index) => {
-		placeholderMap[`{type_${index}}`] = mod.type || "Unknown Type";
-		placeholderMap[`{target_${index}}`] = mod.target || "Unknown Target";
-		placeholderMap[`{flat_${index}}`] = mod.value || "N/A";
-	});
-
-	// Ensure requirementForm and nested data exist
-	if (move.requirementForm && move.requirementForm.requirement) {
-		const req = move.requirementForm.requirement;
-		placeholderMap["{requirementType}"] = req.type || "N/A";
-		placeholderMap["{requirementValue}"] = req.value || "N/A";
-
-		const reqModifiers = Array.isArray(move.requirementForm.data?.modifiers)
-			? move.requirementForm.data.modifiers
-			: [];
-
-		// Include placeholders for requirement modifiers
-		reqModifiers.forEach((mod, index) => {
-			placeholderMap[`{req_type_${index}}`] = mod.type || "Unknown Type";
-			placeholderMap[`{req_target_${index}}`] =
-				mod.target || "Unknown Target";
-			placeholderMap[`{req_flat_${index}}`] = mod.value || "N/A";
+	formattedDescription = formattedDescription.replace("{name}", card.name);
+	formattedDescription = formattedDescription.replace(
+		"{flat}",
+		move.duration
+	);
+	// Ensure modifiers exist and map relevant placeholders
+	if (Array.isArray(move.modifiers)) {
+		move.modifiers.forEach((mod) => {
+			if (mod.flat !== undefined) {
+				formattedDescription = formattedDescription.replace(
+					"{flat}",
+					mod.flat
+				);
+			}
+			if (mod.percentage !== undefined) {
+				formattedDescription = formattedDescription.replace(
+					"{percentage}",
+					mod.percentage
+				);
+			}
+			if (mod.flat !== undefined && mod.percentage !== undefined) {
+				const percentageValue = Math.floor(
+					(mod.percentage / 100) * (card.realPower || 1)
+				);
+				formattedDescription = formattedDescription.replace(
+					"{total}",
+					`${Math.round(mod.flat + percentageValue)}`
+				);
+			}
+			if (mod.target) {
+				formattedDescription = formattedDescription.replace(
+					"{target}",
+					mod.target
+				);
+			}
+			if (mod.type) {
+				formattedDescription = formattedDescription.replace(
+					"{type}",
+					mod.type
+				);
+			}
 		});
 	}
 
-	// Replace placeholders in the description
-	Object.keys(placeholderMap).forEach((placeholder) => {
-		formattedDescription = formattedDescription.replaceAll(
-			placeholder,
-			placeholderMap[placeholder]
-		);
-	});
-
-	// Append modifier details for clarity (if any modifiers exist)
-	const modifierDetails =
-		modifiers.length > 0
-			? modifiers
-					.map(
-						(mod) =>
-							`Type: ${mod.type}, Target: ${mod.target}, Value: ${mod.value}`
-					)
-					.join("\n")
-			: "No modifiers available.";
-
-	return `${formattedDescription}\n\n**Modifiers:**\n${modifierDetails}`;
+	return formattedDescription;
 }
 
 async function messageCreater(image, card, defaultChannel) {
@@ -141,6 +171,18 @@ async function messageCreater(image, card, defaultChannel) {
 				await i.deferUpdate(); // Acknowledge immediately
 
 				if (i.customId === "Claim") {
+					const claimed = await recordClaim(
+						i.user.id,
+						defaultChannel.guild.id
+					);
+					if (!claimed) {
+						await i.followUp({
+							content: "You maxed out on claims today!",
+							ephemeral: true,
+						});
+						return;
+					}
+
 					addToPlayer(i.user, card);
 
 					if (
@@ -163,13 +205,20 @@ async function messageCreater(image, card, defaultChannel) {
 						...moveButtons.slice(0, 5)
 					);
 
+					const newEmbed = new EmbedBuilder()
+						.setColor("000000")
+						.setImage(image)
+						.setDescription(
+							capitalizeFirstLetter(
+								`${card.name} | ${card.realPower} | Owner: ${i.user.displayName}` ||
+									"Unknown Card"
+							)
+						);
+
 					// Edit the message to show move buttons
 					await message.edit({
-						content: `${
-							i.user.username
-						}, congrats on obtaining: ${capitalizeFirstLetter(
-							card.name
-						)}`,
+						content: "Caught!",
+						embeds: [newEmbed],
 						components: [movesRow],
 					});
 				}
@@ -192,19 +241,11 @@ async function messageCreater(image, card, defaultChannel) {
 					// Format description and handle placeholders
 					const formattedDescription = formatDescription(
 						move.description,
-						move.modifiers || [],
+						move,
 						card
 					);
-
-					// Send a new message with the move details
 					await i.followUp({
-						content: `**Move:** ${move.name}\n**Type:** ${
-							move.type
-						}\n**Power:** ${
-							move.modifiers
-								?.map((mod) => mod.value)
-								.join(", ") || "N/A"
-						}\n**Effect:** ${formattedDescription}`,
+						content: `**Move:** ${move.name}\n**Effect:** ${formattedDescription}`,
 						ephemeral: true, // Only visible to the user
 					});
 				}
@@ -222,6 +263,7 @@ async function messageCreater(image, card, defaultChannel) {
 				await message.edit({
 					content: `Boss, ${card.name} ran away!`,
 					components: [],
+					embeds: [],
 				});
 			}
 		});

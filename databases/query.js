@@ -28,6 +28,18 @@ class Query {
 		this.db = this.client.db(this.dbName);
 		this.collection = this.db.collection(this.collectionName);
 	}
+	async countDocuments(query = {}) {
+		await this.connect();
+		try {
+			const count = await this.collection.countDocuments(query);
+			return count;
+		} catch (error) {
+			console.error("Error during countDocuments:", error);
+			return 0; // Return 0 in case of error
+		} finally {
+			await this.disconnect(); // Ensure disconnect
+		}
+	}
 
 	// Disconnect from MongoDB
 	async disconnect() {

@@ -46,7 +46,7 @@ class Card {
 		return new Card(data);
 	}
 	async getRandomMove(data, i = 1) {
-		return moveQuery.aggregate(i, data);
+		return await moveQuery.aggregate(i, data);
 	}
 	async convertToOwnedCard(guildId, inGroup = false) {
 		const ownedCard = new OwnedCard()
@@ -85,10 +85,15 @@ class Card {
 
 	async grabCardMoves(card_id) {
 		try {
+			let tiedData = {
+				parent: {
+					id: this.name.toLowerCase(),
+					isCard: true,
+				},
+			};
 			// 1. Get the move directly tied to the card (parent.id === card.name)
-			let tiedMove = await this.getRandomMove({
-				parent: { id: this.name.toLowerCase() },
-			}); // Use card name instead of ObjectId
+			let tiedMove = await this.getRandomMove(tiedData, 1);
+			// Use card name instead of ObjectId
 			// If no tied move is found, use the default moves
 			if (tiedMove.length === 0) {
 				tiedMove = await this.basicMove();
