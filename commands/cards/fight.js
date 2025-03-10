@@ -7,13 +7,13 @@ const {
 	EmbedBuilder,
 } = require("discord.js");
 
-// Import Battle class from the classes folder to create a new battle instance.
 const { Battle, BattleStatus } = require("../../classes/battle.js");
 const { Card } = require("../../classes/cardManager.js");
 
 const { Query } = require("../../databases/query.js");
 const pvpQuery = new Query("pvpBattles");
 const ownedCardsQuery = new Query("ownedCards");
+const loadoutQuery = new Query("defaultCardChoice");
 
 function checkForUndesiredInteractions(interaction, challenger, challenged) {
 	if (!challenged) {
@@ -29,16 +29,6 @@ function checkForUndesiredInteractions(interaction, challenger, challenged) {
 	}
 }
 
-function grabMostRecentGame(array) {
-	let mostRecent = null;
-	for (const game of array) {
-		if (mostRecent === null || game.created_at > mostRecent.created_at) {
-			mostRecent = game;
-		}
-	}
-	return mostRecent;
-}
-
 function formatTime(ms) {
 	const totalSeconds = Math.floor(ms / 1000);
 	const minutes = Math.floor(totalSeconds / 60);
@@ -49,6 +39,14 @@ function formatTime(ms) {
 async function fetchPlayerCards(userId) {
 	const cards = await ownedCardsQuery.readMany({ owner_id: userId });
 	return Promise.all(cards.map((card) => Card.createFromData(card)));
+}
+
+async function fetchPlayerLoadout(userId, loadoutName) {
+	const loadout = await loadoutQuery.readOne({
+		user_id: userId,
+		loadoutType: loadoutName,
+	});
+	return loadout ? loadout.cardArray : [];
 }
 
 module.exports = {
@@ -65,17 +63,32 @@ module.exports = {
 					"Select the unfortunate opponent you want to challenge"
 				)
 				.setRequired(true)
+		)
+		.addStringOption((option) =>
+			option
+				.setName("loadout")
+				.setDescription(
+					"If you have a saved loadout, specify it here to auto-choose your cards"
+				)
 		),
 	async execute(interaction) {
 		const guild = interaction.guild;
 		const challenger = interaction.user;
 		const challenged = interaction.options.getUser("opponent");
+		const loadoutName = interaction.options.getString("loadout");
 
 		const undesiredIntChecker = checkForUndesiredInteractions(
 			interaction,
 			challenger,
 			challenged
 		);
+		let checker = await pvpQuery.readMany({
+			guild_id: guild.id,
+			challenger_id: challenger.id,
+			challenged_id: challenged.id,
+		});
+
+		checker = grabMostRecentGame(checker);
 
 		if (undesiredIntChecker == 0) {
 			return interaction.reply(
@@ -88,28 +101,6 @@ module.exports = {
 		} else if (undesiredIntChecker == 2) {
 			return interaction.reply("Boss, you can't challenge yourself.");
 		}
-
-		// Create a new battle instance
-		const newBattle = new Battle();
-		newBattle.guild_id = guild.id;
-		newBattle.challenger_id = challenger.id;
-		newBattle.challenged_id = challenged.id;
-		newBattle.channel_id = interaction.channel.id;
-		newBattle.status = BattleStatus.PENDING;
-		newBattle.created_at = new Date();
-
-		await newBattle.createBattle();
-
-		let checker = await pvpQuery.readMany({
-			guild_id: guild.id,
-			challenger_id: challenger.id,
-			challenged_id: challenged.id,
-		});
-
-		checker = grabMostRecentGame(checker);
-
-		const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
-		const asOfChecking = new Date() - tenMinutes;
 
 		if (checker && checker.status === BattleStatus.PENDING) {
 			return interaction.reply(
@@ -128,86 +119,124 @@ module.exports = {
 			);
 		}
 
-		try {
-			const acceptEmbed = new EmbedBuilder()
-				.setTitle("Battle Request")
-				.setDescription(
-					`Boss, ${challenger.username} wants to challenge you to a PvP battle. \nDo you accept? `
-				)
-				.setFooter({
-					text: `Request sent by ${challenger.username} @ ${interaction.guild.name}`,
-				});
+		// Create a new battle instance
+		const newBattle = new Battle();
+		newBattle.guild_id = guild.id;
+		newBattle.challenger_id = challenger.id;
+		newBattle.challenged_id = challenged.id;
+		newBattle.channel_id = interaction.channel.id;
+		newBattle.status = BattleStatus.PENDING;
+		newBattle.created_at = new Date();
 
-			const buttonRow = new ActionRowBuilder().addComponents(
-				new ButtonBuilder()
-					.setCustomId("accept_battle")
-					.setEmoji("✔️")
-					.setStyle(ButtonStyle.Success),
-				new ButtonBuilder()
-					.setCustomId("deny_battle")
-					.setEmoji("❌")
-					.setStyle(ButtonStyle.Danger)
-			);
+		await newBattle.createBattle();
 
-			const message = await challenged.send({
-				embeds: [acceptEmbed],
-				components: [buttonRow],
-				fetchReply: true,
+		const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+		const asOfChecking = new Date() - tenMinutes;
+
+		// Start the selection process for both players
+		const acceptEmbed = new EmbedBuilder()
+			.setTitle("Battle Request")
+			.setDescription(
+				`Boss, ${challenger.username} wants to challenge you to a PvP battle. \nDo you accept?`
+			)
+			.setFooter({
+				text: `Request sent by ${challenger.username} @ ${interaction.guild.name}`,
 			});
 
-			interaction.reply({
-				content: "Handshake received...",
-				ephemeral: true,
-			});
+		const buttonRow = new ActionRowBuilder().addComponents(
+			new ButtonBuilder()
+				.setCustomId("accept_battle")
+				.setEmoji("✔️")
+				.setStyle(ButtonStyle.Success),
+			new ButtonBuilder()
+				.setCustomId("deny_battle")
+				.setEmoji("❌")
+				.setStyle(ButtonStyle.Danger)
+		);
 
-			const collector = message.createMessageComponentCollector({
-				componentType: ComponentType.Button,
-				time: 300000, // 5 minutes
-			});
+		const message = await challenged.send({
+			embeds: [acceptEmbed],
+			components: [buttonRow],
+			fetchReply: true,
+		});
 
-			collector.on("collect", async (i) => {
-				if (i.user.id !== challenged.id) return;
+		interaction.reply({
+			content: "Handshake received...",
+			ephemeral: true,
+		});
 
-				if (i.customId === "accept_battle") {
-					await interaction.followUp(
-						"Boss, they accepted the challenge."
+		const collector = message.createMessageComponentCollector({
+			componentType: ComponentType.Button,
+			time: 300000, // 5 minutes
+		});
+
+		collector.on("collect", async (i) => {
+			if (i.user.id !== challenged.id) return;
+
+			if (i.customId === "accept_battle") {
+				await interaction.followUp(
+					"Boss, they accepted the challenge."
+				);
+
+				// Fetch and assign cards to the challenger
+				let challengerCards;
+				if (loadoutName) {
+					// Load challenger loadout
+					const challengerLoadout = await fetchPlayerLoadout(
+						challenger.id,
+						loadoutName
 					);
-
-					// Fetch and assign cards to both players
-					const challengerCards = await fetchPlayerCards(
-						challenger.id
+					challengerCards = await Promise.all(
+						challengerLoadout.map((cardId) =>
+							Card.createFromData({ _id: cardId })
+						)
 					);
-					const challengedCards = await fetchPlayerCards(
-						challenged.id
-					);
-
-					challengerCards.forEach((card) =>
-						newBattle.addCard(card, true)
-					);
-					challengedCards.forEach((card) =>
-						newBattle.addCard(card, false)
-					);
-
-					await newBattle.updateBattle({
-						cards: newBattle.cards.map((card) => card.toObject()),
-					});
-
-					await newBattle.startBattle();
-				} else if (i.customId === "deny_battle") {
-					await newBattle.forfeit(challenged.id);
-					await interaction.followUp(
-						"Boss, they denied the challenge."
-					);
+				} else {
+					// Fetch all cards if no loadout
+					challengerCards = await fetchPlayerCards(challenger.id);
 				}
 
-				collector.stop();
-			});
-		} catch (error) {
-			console.error("Error starting battle:", error);
-			await interaction.reply({
-				content: "Error starting battle. Please try again later.",
-				ephemeral: true,
-			});
-		}
+				challengerCards = challengerCards.slice(0, 4);
+
+				// Fetch and assign cards to the challenged player
+				let challengedCards;
+				if (loadoutName) {
+					// Load challenged player loadout
+					const challengedLoadout = await fetchPlayerLoadout(
+						challenged.id,
+						loadoutName
+					);
+					challengedCards = await Promise.all(
+						challengedLoadout.map((cardId) =>
+							Card.createFromData({ _id: cardId })
+						)
+					);
+				} else {
+					// Fetch all cards if no loadout
+					challengedCards = await fetchPlayerCards(challenged.id);
+				}
+
+				challengedCards = challengedCards.slice(0, 4);
+
+				// Add cards to battle
+				challengerCards.forEach((card) =>
+					newBattle.addCard(card, true)
+				);
+				challengedCards.forEach((card) =>
+					newBattle.addCard(card, false)
+				);
+
+				await newBattle.updateBattle({
+					cards: newBattle.cards.map((card) => card.toObject()),
+				});
+
+				await newBattle.startBattle();
+			} else if (i.customId === "deny_battle") {
+				await newBattle.updateBattle("denied");
+				await interaction.followUp("Boss, they denied the challenge.");
+			}
+
+			collector.stop();
+		});
 	},
 };

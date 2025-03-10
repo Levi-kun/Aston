@@ -67,21 +67,7 @@ async function recordClaim(userId, guildId) {
 }
 
 function capitalizeFirstLetter(str) {
-	return str
-		.split(" ")
-		.map((word) => {
-			for (let i = 0; i < word.length; i++) {
-				if (/[a-zA-Z]/.test(word.charAt(i))) {
-					return (
-						word.slice(0, i) +
-						word.charAt(i).toUpperCase() +
-						word.slice(i + 1)
-					);
-				}
-			}
-			return word;
-		})
-		.join(" ");
+	return str.replace(/\b[a-z]/g, (char) => char.toUpperCase());
 }
 
 function addToPlayer(user, card) {
@@ -166,6 +152,8 @@ async function messageCreater(image, card, defaultChannel) {
 			time: 300_000,
 		});
 
+		let cardClaimed = false;
+
 		collector.on("collect", async (i) => {
 			try {
 				await i.deferUpdate(); // Acknowledge immediately
@@ -184,6 +172,7 @@ async function messageCreater(image, card, defaultChannel) {
 					}
 
 					addToPlayer(i.user, card);
+					cardClaimed = true; // Mark card as claimed
 
 					if (
 						!Array.isArray(card._move_sets) ||
@@ -193,7 +182,6 @@ async function messageCreater(image, card, defaultChannel) {
 						return;
 					}
 
-					// Create buttons for moves (max 5 buttons per row)
 					const moveButtons = card._move_sets.map((move, index) =>
 						new ButtonBuilder()
 							.setCustomId(`move_${index}`)
@@ -215,15 +203,12 @@ async function messageCreater(image, card, defaultChannel) {
 							)
 						);
 
-					// Edit the message to show move buttons
 					await message.edit({
 						content: "Caught!",
 						embeds: [newEmbed],
 						components: [movesRow],
 					});
 				}
-
-				// If a move button is pressed
 				if (i.customId.startsWith("move_")) {
 					const moveIndex = parseInt(i.customId.split("_")[1], 10);
 					const move = card._move_sets[moveIndex];
@@ -245,7 +230,7 @@ async function messageCreater(image, card, defaultChannel) {
 						card
 					);
 					await i.followUp({
-						content: `**Move:** ${move.name}\n**Effect:** ${formattedDescription}`,
+						content: `**Move:** ${move.name}\n**Descriptions:** ${formattedDescription}\n**Cooldown:** ${move.cooldown}	| **Turn Cost:** ${move.turnCost}`,
 						ephemeral: true, // Only visible to the user
 					});
 				}
@@ -258,13 +243,27 @@ async function messageCreater(image, card, defaultChannel) {
 			}
 		});
 
-		collector.on("end", async (_, reason) => {
-			if (reason === "time") {
-				await message.edit({
-					content: `Boss, ${card.name} ran away!`,
-					components: [],
-					embeds: [],
-				});
+		collector.on("end", async (collected, reason) => {
+			try {
+				if (!cardClaimed && reason === "time") {
+					// No one claimed the card, and it timed out
+					await message.edit({
+						content: `Boss, ${card.name} ran away!`,
+						components: [],
+						embeds: [],
+					});
+				} else if (cardClaimed) {
+					// Card was claimed, just remove buttons
+					await message.edit({
+						components: [],
+					});
+				}
+			} catch (endErr) {
+				console.error(
+					"Error during collector end:",
+					endErr.message,
+					endErr.stack
+				);
 			}
 		});
 	} catch (err) {
@@ -310,10 +309,10 @@ module.exports = {
 			const image = photos.map((photo) => photo.attachment);
 
 			const defaultChannel = guild.channels.cache.get(defaultChannelId);
-			if (defaultChannel) {
-				await messageCreater(image[0], adjustedCard, defaultChannel);
-			} else {
+			if (!defaultChannel) {
 				console.error("Default channel not found");
+			} else {
+				await messageCreater(image[0], adjustedCard, defaultChannel);
 			}
 		} catch (err) {
 			console.error(`Error executing spawnInCard: ${err.message}`);

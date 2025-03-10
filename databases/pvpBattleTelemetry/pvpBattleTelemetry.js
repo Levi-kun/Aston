@@ -6,6 +6,7 @@ const pvpBattleTelemetrySchema = {
 		properties: {
 			_id: { bsonType: "objectId" },
 			battle_id: { bsonType: "objectId" }, // Links to pvpBattles _id
+			player_id: { bsonType: "string" },
 			totalTurns: { bsonType: "int" }, // Total number of turns in the battle
 			totalDamageDealt: { bsonType: "int" }, // Cumulative damage across the battle
 			totalHealingDone: { bsonType: "int" }, // Cumulative healing across the battle

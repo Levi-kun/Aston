@@ -386,6 +386,18 @@ class Query {
 			throw err;
 		}
 	}
+	async deleteMany(filter = {}) {
+		await this.connect();
+		try {
+			// Delete all documents that match the filter
+			const result = await this.collection.deleteMany(filter);
+			return result;
+		} catch (error) {
+			console.error("Error during deleteAll:", error);
+		} finally {
+			await this.disconnect(); // Ensure disconnect
+		}
+	}
 }
 
 module.exports = { Query };

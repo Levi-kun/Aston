@@ -36,6 +36,17 @@ const ownedMovesSchema = {
 				bsonType: "int",
 				description: "Duration of the move effect in turns",
 			},
+			cooldown: {
+				bsonType: "int",
+				description: "Turns required to wait before reusing the move",
+			},
+			turnCost: {
+				bsonType: "int",
+				minimum: 1,
+				maximum: 5,
+				description:
+					"Move power cost (1-5) required to use this move in a turn",
+			},
 			modifiers: {
 				bsonType: "array",
 				items: {
