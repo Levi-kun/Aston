@@ -128,7 +128,7 @@ module.exports = {
 		newBattle.status = BattleStatus.PENDING;
 		newBattle.created_at = new Date();
 
-		await newBattle.createBattle();
+		await newBattle.initMain();
 
 		const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
 		const asOfChecking = new Date() - tenMinutes;
@@ -173,68 +173,68 @@ module.exports = {
 		collector.on("collect", async (i) => {
 			if (i.user.id !== challenged.id) return;
 
-			if (i.customId === "accept_battle") {
-				await interaction.followUp(
-					"Boss, they accepted the challenge."
-				);
-
-				// Fetch and assign cards to the challenger
-				let challengerCards;
-				if (loadoutName) {
-					// Load challenger loadout
-					const challengerLoadout = await fetchPlayerLoadout(
-						challenger.id,
-						loadoutName
-					);
-					challengerCards = await Promise.all(
-						challengerLoadout.map((cardId) =>
-							Card.createFromData({ _id: cardId })
-						)
-					);
-				} else {
-					// Fetch all cards if no loadout
-					challengerCards = await fetchPlayerCards(challenger.id);
-				}
-
-				challengerCards = challengerCards.slice(0, 4);
-
-				// Fetch and assign cards to the challenged player
-				let challengedCards;
-				if (loadoutName) {
-					// Load challenged player loadout
-					const challengedLoadout = await fetchPlayerLoadout(
-						challenged.id,
-						loadoutName
-					);
-					challengedCards = await Promise.all(
-						challengedLoadout.map((cardId) =>
-							Card.createFromData({ _id: cardId })
-						)
-					);
-				} else {
-					// Fetch all cards if no loadout
-					challengedCards = await fetchPlayerCards(challenged.id);
-				}
-
-				challengedCards = challengedCards.slice(0, 4);
-
-				// Add cards to battle
-				challengerCards.forEach((card) =>
-					newBattle.addCard(card, true)
-				);
-				challengedCards.forEach((card) =>
-					newBattle.addCard(card, false)
-				);
-
-				await newBattle.updateBattle({
-					cards: newBattle.cards.map((card) => card.toObject()),
-				});
-
-				await newBattle.startBattle();
-			} else if (i.customId === "deny_battle") {
+			if (i.customId === "deny_battle") {
 				await newBattle.updateBattle("denied");
 				await interaction.followUp("Boss, they denied the challenge.");
+				return;
 			}
+
+			newBattle.initTelemetry(challenged.id);
+			newBattle.initTelemetry(challenger.id);
+
+			interaction.followUp({
+				content: "Boss, the challenge was accepted. Let's get ready!",
+			});
+
+			// Fetch and assign cards to the challenger
+			let challengerCards;
+			if (loadoutName) {
+				// Load challenger loadout
+				const challengerLoadout = await fetchPlayerLoadout(
+					challenger.id,
+					loadoutName
+				);
+				challengerCards = await Promise.all(
+					challengerLoadout.map((cardId) =>
+						Card.createFromData({ _id: cardId })
+					)
+				);
+			} else {
+				// Fetch all cards if no loadout
+				challengerCards = await fetchPlayerCards(challenger.id);
+			}
+
+			challengerCards = challengerCards.slice(0, 4);
+
+			// Fetch and assign cards to the challenged player
+			let challengedCards;
+			if (loadoutName) {
+				// Load challenged player loadout
+				const challengedLoadout = await fetchPlayerLoadout(
+					challenged.id,
+					loadoutName
+				);
+				challengedCards = await Promise.all(
+					challengedLoadout.map((cardId) =>
+						Card.createFromData({ _id: cardId })
+					)
+				);
+			} else {
+				// Fetch all cards if no loadout
+				challengedCards = await fetchPlayerCards(challenged.id);
+			}
+
+			challengedCards = challengedCards.slice(0, 4);
+
+			// Add cards to battle
+			challengerCards.forEach((card) => newBattle.addCard(card, true));
+			challengedCards.forEach((card) => newBattle.addCard(card, false));
+
+			await newBattle.updateBattle({
+				cards: newBattle.cards.map((card) => card.toObject()),
+			});
+			await newBattle.updateBattle("ON_GOING");
+			await newBattle.startBattle();
 
 			collector.stop();
 		});

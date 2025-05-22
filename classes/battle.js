@@ -141,7 +141,7 @@ class Battle {
 	}
 	async initAll(player_id) {
 		this.initMain();
-		this.initTelemetry();
+		this.initTelemetry(player_id);
 		this.initCards(player_id);
 	}
 	/* 
@@ -149,6 +149,121 @@ class Battle {
 	End of Initialize Functions
 	
 	*/
+
+	async startBattle(client) {
+		// Fetch users and channels
+		const challengerUser = await client.users.fetch(this.challenger);
+		const challengedUser = await client.users.fetch(this.challenged);
+		const guild = await client.guilds.fetch(this.guild_id);
+		const channel = await guild.channels.fetch(this.channel_id);
+
+		// Prepare data (replace with your actual card/move logic)
+		const enemyCard = {
+			/* ...enemy card data... */
+		};
+		const enemyMoves = [
+			/* ...move1, move2, move3... */
+		];
+		const enemyRemainingCards = 3; // Example
+
+		// BOARD MESSAGE EMBED
+		const boardEmbed = new EmbedBuilder()
+			.setTitle("Enemy Board")
+			.setDescription(
+				`**Enemy Card:** ${enemyCard.name}\n` +
+					`**Moves:** ${enemyMoves.map((m) => m.name).join(", ")}\n` +
+					`**Enemy Remaining Cards:** ${enemyRemainingCards}`
+			);
+
+		// GAME MESSAGE EMBED + BUTTONS
+		const gameEmbed = new EmbedBuilder()
+			.setTitle("Game Update")
+			.setDescription("Latest game message here...");
+
+		const buttonRow = new ActionRowBuilder().addComponents(
+			new ButtonBuilder()
+				.setCustomId("inspect")
+				.setLabel("INSPECT")
+				.setStyle(ButtonStyle.Primary),
+			new ButtonBuilder()
+				.setCustomId("switch")
+				.setLabel("SWITCH")
+				.setStyle(ButtonStyle.Primary),
+			new ButtonBuilder()
+				.setCustomId("move1")
+				.setLabel("MOVE1")
+				.setStyle(ButtonStyle.Success),
+			new ButtonBuilder()
+				.setCustomId("move2")
+				.setLabel("MOVE2")
+				.setStyle(ButtonStyle.Success),
+			new ButtonBuilder()
+				.setCustomId("move3")
+				.setLabel("MOVE3")
+				.setStyle(ButtonStyle.Success),
+			new ButtonBuilder()
+				.setCustomId("forfeit")
+				.setLabel("FORFEIT")
+				.setStyle(ButtonStyle.Danger)
+		);
+
+		// Send to server channel
+		await channel.send({ embeds: [boardEmbed] });
+		const gameMsg = await channel.send({
+			embeds: [gameEmbed],
+			components: [buttonRow],
+		});
+
+		// Send to challenger DM
+		await challengerUser.send({ embeds: [boardEmbed] });
+		const challengerGameMsg = await challengerUser.send({
+			embeds: [gameEmbed],
+			components: [buttonRow],
+		});
+
+		// Send to challenged DM
+		await challengedUser.send({ embeds: [boardEmbed] });
+		const challengedGameMsg = await challengedUser.send({
+			embeds: [gameEmbed],
+			components: [buttonRow],
+		});
+
+		// Button interaction collector (example for channel, repeat for DMs as needed)
+		const filter = (i) =>
+			[this.challenger, this.challenged].includes(i.user.id);
+		const collector = gameMsg.createMessageComponentCollector({
+			componentType: ComponentType.Button,
+			filter,
+			time: 60000,
+		});
+
+		collector.on("collect", async (i) => {
+			let description = "";
+			switch (i.customId) {
+				case "inspect":
+					description = "Shows details about the current card.";
+					break;
+				case "switch":
+					description = "Switch to another card.";
+					break;
+				case "move1":
+					description = "Use Move 1.";
+					break;
+				case "move2":
+					description = "Use Move 2.";
+					break;
+				case "move3":
+					description = "Use Move 3.";
+					break;
+				case "forfeit":
+					description = "Forfeit the battle.";
+					break;
+			}
+			// Ephemeral message (only visible to the user)
+			await i.reply({ content: description, ephemeral: true });
+			// Handle game logic here...
+		});
+	}
 }
 
 (module.exports = Battle), BattleStatus;

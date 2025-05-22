@@ -68,7 +68,7 @@ class Card {
 	}
 
 	async grabPhotosForCard() {
-		const photo = pictureQuery.readOne({ card_id: this._id });
+		const photo = await pictureQuery.readOne({ card_id: this._id });
 
 		this._photoUrl = photo.attachment;
 
@@ -259,8 +259,7 @@ class OwnedCard {
 		this.move_ids = [];
 		this._move_sets = [];
 
-		// Initialize move sets for the cardp
-		9;
+		// Initialize move sets for the card
 		return new Proxy(this, {
 			set: async (target, prop, value) => {
 				target[prop] = value;
@@ -356,11 +355,6 @@ class OwnedCard {
 		return this;
 	}
 
-	addRank(rank) {
-		this.rank = rank;
-		return this;
-	}
-
 	isNewCard() {
 		this.newCard = true;
 		return this;
@@ -415,13 +409,13 @@ class OwnedCard {
 		if (!cardIds.length) return [];
 
 		try {
-			const ownedCards = await ownedCardsQuery.findMany({
+			const ownedCards = await ownedCardsQuery.readMany({
 				card_id: { $in: cardIds },
 			});
 
 			if (!ownedCards.length) return [];
 
-			const cards = ownedCards.map((oc) => new OwnedCard(oc)._proxy());
+			const cards = ownedCards.map((oc) => new OwnedCard(oc));
 
 			return cards;
 		} catch (error) {
@@ -432,7 +426,9 @@ class OwnedCard {
 		}
 	}
 	async createOwnedCardDocument() {
-		await this._move_sets.map((move) => ownedMovesQuery.insertOne(move));
+		await this._move_sets.map(
+			async (move) => await ownedMovesQuery.insertOne(move)
+		);
 		// Build the document object
 		const ownedCardDocument = {
 			_id: this._id,
@@ -454,7 +450,7 @@ class OwnedCard {
 	}
 
 	async grabPhotosForCard() {
-		const photo = pictureQuery.readOne({ card_id: this.card_id });
+		const photo = await pictureQuery.readOne({ card_id: this.card_id });
 
 		this._photoUrl = photo.attachment;
 
@@ -472,10 +468,10 @@ class OwnedCard {
 					_id: this.move_ids[i],
 					card_id: this.card_id,
 				});
-				this.move_sets[this.move_ids[i]] = moveData;
+				this._move_sets[this._move_ids[i]] = moveData;
 			}
 		}
-		return this.move_sets;
+		return this._move_sets;
 	}
 	getRarity() {
 		if (this.rank <= 2) {
