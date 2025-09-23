@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 const { Battle, BattleStatus } = require("../../classes/battle.js");
-const { Card } = require("../../classes/cardManager.js");
+const { OwnedCard } = require("../../classes/cardManager.js");
 
 const { Query } = require("../../databases/query.js");
 const pvpQuery = new Query("pvpBattles");
@@ -38,7 +38,7 @@ function formatTime(ms) {
 
 async function fetchPlayerCards(userId) {
 	const cards = await ownedCardsQuery.readMany({ owner_id: userId });
-	return Promise.all(cards.map((card) => Card.createFromData(card)));
+	return Promise.all(cards.map((card) => OwnedCard.buildsWithData(card)));
 }
 
 async function fetchPlayerLoadout(userId, loadoutName) {
@@ -70,6 +70,7 @@ module.exports = {
 				.setDescription(
 					"If you have a saved loadout, specify it here to auto-choose your cards"
 				)
+				.setRequired(true)
 		),
 	async execute(interaction) {
 		const guild = interaction.guild;
@@ -196,7 +197,7 @@ module.exports = {
 				);
 				challengerCards = await Promise.all(
 					challengerLoadout.map((cardId) =>
-						Card.createFromData({ _id: cardId })
+						Card.buildsWithData({ _id: cardId })
 					)
 				);
 			} else {
@@ -216,7 +217,7 @@ module.exports = {
 				);
 				challengedCards = await Promise.all(
 					challengedLoadout.map((cardId) =>
-						Card.createFromData({ _id: cardId })
+						OwnedCard.buildsWithData({ _id: cardId })
 					)
 				);
 			} else {

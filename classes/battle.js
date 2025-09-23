@@ -157,10 +157,17 @@ class Battle {
 		const guild = await client.guilds.fetch(this.guild_id);
 		const channel = await guild.channels.fetch(this.channel_id);
 
-		// Prepare data (replace with your actual card/move logic)
-		const enemyCard = {
-			/* ...enemy card data... */
-		};
+		if (!channel || !challengerUser || !challengedUser || !guild) {
+			throw new Error(
+				"Invalid Channel, User, or Guild. Please check the IDs."
+			);
+		}
+
+		const enemyCard = pvpCards.readMany({
+			player_id: this.challenged,
+			main_id: this._id,
+		});
+
 		const enemyMoves = [
 			/* ...move1, move2, move3... */
 		];
@@ -178,7 +185,7 @@ class Battle {
 		// GAME MESSAGE EMBED + BUTTONS
 		const gameEmbed = new EmbedBuilder()
 			.setTitle("Game Update")
-			.setDescription("Latest game message here...");
+			.setDescription(" ");
 
 		const buttonRow = new ActionRowBuilder().addComponents(
 			new ButtonBuilder()
