@@ -1,6 +1,4 @@
-const { url } = require("inspector");
 const { MongoClient } = require("mongodb");
-const fs = require("fs").promises; // Use promises-based fs functions
 const mpath = require("mpath");
 const path = require("path");
 
@@ -16,7 +14,6 @@ function createURI() {
         const password = process.env.ASTONDB_PASSWORD;
 
         const completeURI = `mongodb://${user}:${password}@${uri}/astondb?authSource=astondb`;
-        console.log(completeURI);
         return completeURI;
 }
 
@@ -125,7 +122,7 @@ class Query {
                 await this.connect(); // Ensure DB connection
                 try {
                         try {
-                                await this.validateData(data); // Validate data before inserting
+                                this.validateData(data); // Validate data before inserting
                         } catch (error) {
                                 console.log("Validation error: ", error);
                         }
@@ -324,7 +321,7 @@ class Query {
         async readMany(query, sort = null, limit = null) {
                 await this.connect();
                 try {
-                        const result = await this.collection.find(query);
+                        const result = this.collection.find(query);
                         if (sort) {
                                 result.sort({ sort });
                         }
