@@ -49,7 +49,7 @@ module.exports = {
                                 const filePath = path.join(commandsPath, file);
                                 const command = require(filePath);
                                 if ("data" in command && "execute" in command) {
-                                        command.set(command.data.name, command);
+                                        commands.set(command.data.name, command);
                                         console.log(`${command.data.name}: Logged.`);
                                 } else {
                                         console.log(
