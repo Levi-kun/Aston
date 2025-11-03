@@ -406,6 +406,25 @@ class Query {
                         await this.disconnect(); // Ensure disconnect
                 }
         }
+        async getRandomOne(filter = {}) {
+                await this.connect();
+                try {
+                        const pipeline = [
+                                { $match: filter }, // optional filtering before sampling
+                                { $sample: { size: 1 } },
+                        ];
+
+                        const cursor = this.collection.aggregate(pipeline);
+                        const results = await cursor.toArray();
+
+                        return results[0] || null; // return the single random doc
+                } catch (error) {
+                        console.error("Error fetching random document:", error);
+                        return null;
+                } finally {
+                        await this.disconnect();
+                }
+        }
 }
 
 module.exports = { Query };
