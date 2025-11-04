@@ -1,5 +1,5 @@
 export const CreationEvent = {
-        collectionName: "CreationEvent",
+        collectionName: "creationEvent",
         schema: {
                 bsonType: "object",
                 required: ["channel_id", "guild_id", "timestamp", "spawnedCard_id"],

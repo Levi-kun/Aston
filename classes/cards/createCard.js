@@ -1,5 +1,3 @@
-import { Timestamp } from "mongodb";
-
 export class cardCreation {
         constructor(variantQuery, spawnedQuery, playerQuery, eventQuery) {
                 this.variantQuery = variantQuery;

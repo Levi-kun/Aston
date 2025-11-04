@@ -1,4 +1,4 @@
-const guildDataBaseSchema = {
+export const guildDataBaseSchema = {
         collectionName: "GuildDataBase",
         schema: {
                 bsonType: "object",
@@ -86,5 +86,3 @@ const guildDataBaseSchema = {
                 },
         },
 };
-
-module.exports = guildDataBaseSchema;
