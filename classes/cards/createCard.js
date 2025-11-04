@@ -23,7 +23,7 @@ export class cardCreation {
                         if (r < cumulative) return i + 1;
                 }
 
-                return 1; // fallback
+                return 1;
         }
 
         /**
@@ -42,13 +42,10 @@ export class cardCreation {
                         { value: 5, weight: 2 },
                 ];
 
-                // Compute total weight
                 const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0);
 
-                // Pick a random number between 0 and totalWeight
                 const random = Math.random() * totalWeight;
 
-                // Find which value the random number falls into
                 let cumulative = 0;
                 for (const item of weights) {
                         cumulative += item.weight;
@@ -81,10 +78,18 @@ export class cardCreation {
                         spawnedCard_id: spawnedCard._id,
                 });
 
-                this.eventId = event._id
+                this.eventId = event._id;
+                this.spawnCardId = spawnedCard._id;
 
                 return spawnedCard;
         }
 
-        async claimedSpawnCard()
+        async compilePlayerCard() {
+                if (!this.spawnCardId) return;
+                if (!this.eventId) return;
+        }
+
+        async claimedSpawnCard(userid) {
+                this.playerQuery.insertOne();
+        }
 }
