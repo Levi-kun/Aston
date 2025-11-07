@@ -9,11 +9,14 @@ function isObject(value) {
 }
 
 function createURI() {
-        const uri = process.env.MONGODB_URI;
+        const uri =
+                process.env.LOCATION == "IN"
+                        ? process.env.MONGODB_URI_IN
+                        : process.env.MONGODB_URI_OUT;
         const user = process.env.ASTONDB_USER;
         const password = process.env.ASTONDB_PASSWORD;
+        const completeURI = `mongodb://${user}:${password}@${uri}/astondb?authMechanism=SCRAM-SHA-256&authSource=astondb`;
 
-        const completeURI = `mongodb://${user}:${password}@${uri}/astondb?authSource=astondb`;
         return completeURI;
 }
 
@@ -239,7 +242,7 @@ class Query {
                 await this.connect();
                 try {
                         const result = await this.collection.findOne(query);
-                        if (result == null) return {};
+                        if (result == null) return null;
                         return result;
                 } catch (e) {
                         console.error("Error reading document:", e);

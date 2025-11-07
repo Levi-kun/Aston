@@ -8,7 +8,7 @@ export const PlayerCard = {
                         "rarityType",
                         "player_id",
                         "moveSet",
-                        "stats",
+                        "base_stats",
                         "type",
                 ],
                 properties: {
@@ -52,7 +52,7 @@ export const PlayerCard = {
                                         "Resolved list of Move document references from SpawnedCard.moveSet.",
                         },
 
-                        stats: {
+                        baseStats: {
                                 bsonType: "object",
                                 required: ["power", "level", "defense", "slotCapacity"],
                                 properties: {
@@ -94,11 +94,44 @@ export const PlayerCard = {
                                 description:
                                         "Resolved photo reference: VariantCard.refPhotoRef overrides ParentCard.photoRef if defined.",
                         },
+
+                        equippedItems: {
+                                bsonType: "array",
+                                items: {
+                                        bsonType: "object",
+                                        required: ["refItemId"],
+                                        properties: {
+                                                refItemId: {
+                                                        bsonType: "objectId",
+                                                        description:
+                                                                "Reference to the PlayerItem equipped to this card at snapshot time.",
+                                                },
+                                                slotIndex: {
+                                                        bsonType: "int",
+                                                        minimum: 0,
+                                                        description:
+                                                                "Which slot the item occupied in the card’s inventory layout.",
+                                                },
+                                        },
+                                },
+                                description:
+                                        "References to PlayerItem documents equipped to this card when the snapshot was created.",
+                        },
+
+                        claimedAt: {
+                                bsonType: "date",
+                                description: "When the card was claimed by the player.",
+                        },
+
+                        createdAt: {
+                                bsonType: "date",
+                                description: "When this snapshot of the card was created.",
+                        },
                 },
         },
         options: {
-                immutable: true, // Logical convention — MongoDB doesn’t enforce this, but app-level logic should.
+                immutable: true,
                 description:
-                        "Append-only immutable snapshot of a card’s resolved state for a specific player.",
+                        "Append-only immutable snapshot of a card’s resolved state for a specific player, including equipped items at creation time.",
         },
 };

@@ -16,6 +16,9 @@ export const player = {
                                 bsonType: "objectId",
                                 description: "Reference to the guild the player belongs to",
                         },
+                        type: {
+                                bsonType: "int",
+                        },
                 },
         },
 };

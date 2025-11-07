@@ -7,7 +7,8 @@
 		"mongodb": "^6.9.0",
 		"mpath": "^0.9.0",
 		"node-schedule": "^2.1.1",
-		"sequelize": "^6.37.3"
+		"sequelize": "^6.37.3",
+		"sharp": "^0.34.5"
 	},
 	"devDependencies": {
 		"eslint": "^9.1.1"

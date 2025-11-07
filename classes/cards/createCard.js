@@ -1,5 +1,12 @@
 export class cardCreation {
-        constructor(variantQuery, spawnedQuery, playerQuery, eventQuery) {
+        constructor(
+                parentQuery,
+                variantQuery,
+                spawnedQuery,
+                playerQuery,
+                eventQuery,
+        ) {
+                this.playerQuery = parentQuery;
                 this.variantQuery = variantQuery;
                 this.spawnedQuery = spawnedQuery;
                 this.playerQuery = playerQuery;
@@ -55,15 +62,49 @@ export class cardCreation {
                 }
         }
 
+        async getPlayer(userId, guildId) {
+                const player = await this.playerQuery.readOne({
+                        userId: userId,
+                        guildId: guildId,
+                });
+
+                if (!player) return;
+
+                return player;
+        }
+
+        async getBaseLevel(userId, guildId) {
+                const player = await this.getPlayer(userId, guildId);
+
+                const baseLevel = 0;
+                if (player.type !== 0) {
+                        baseLevel = 200;
+                } else {
+                        baseLevel = 100;
+                }
+
+                return baseLevel;
+        }
+
         async triggerCardCreation() {
-                const variantCard = await this.spawnedQuery.getRandomOne({
+                const parentCard = await this.parentQuery.getRandomOne({
                         baseRarity: pickCard(),
                 });
 
-                const spawnedCard = await this.variantQuery.getRandomOne({
-                        refParentCard: variantCard,
+                if (!parentCard) return;
+
+                const variantCard = await this.variantQuery.getRandomOne({
+                        refParentCard: parentCard._id,
                         rarityType: this.rollRarity(),
                 });
+                if (!variantCard) return;
+
+                const insertSpawnedCard = {
+                        moveset: await this.generateMoveSet(),
+                        refVariantCard: variantCard._id,
+                };
+
+                const spawnedCard = this.spawnedQuery.insert(insertSpawnedCard);
 
                 return spawnedCard;
         }
@@ -84,12 +125,47 @@ export class cardCreation {
                 return spawnedCard;
         }
 
-        async compilePlayerCard() {
+        async compilePlayerCard(userId, guildId) {
                 if (!this.spawnCardId) return;
                 if (!this.eventId) return;
+
+                const spawned = await this.spawnedQuery.readOne({
+                        _id: this.spawnCardId,
+                });
+                if (!spawned) return;
+
+                const variant = await this.variantQuery({ _id: spawned.refParentCard });
+                if (!variant) return;
+
+                const parent = await this.parentQuery({ _id: variant.refParentCard });
+                if (!parent) return;
+
+                const compiled = {
+                        title: variant.title || parent.name,
+                        description: variant.description || parent.description,
+                        rarityType: variant.rarityType,
+                        moveSet: spawned.moveSet,
+                        type: parent.type,
+                        photoRef: variant.photoRef || parent.photoRef,
+                        refPreviousCard: spawned.refPreviousCard || null,
+                        createdAt: spawned.createdAt || new Date(),
+                        claimedAt: new Date(),
+                        basestats: {
+                                level: spawned.stats.level,
+                                power: spawned.stats.power,
+                                defense: spawned.stats.defense,
+                                slotCapacity: spawned.stats.slotCapacity,
+                        },
+                };
+
+                return compiled;
         }
 
-        async claimedSpawnCard(userid) {
+        async claimedSpawnCard(userId, guildId) {
+                const userCard = await this.compilePlayerCard(userId, guildId);
+
+                userCard.player_id = await this.getPlayer(userId, guildId)._id;
+
                 this.playerQuery.insertOne();
         }
 }

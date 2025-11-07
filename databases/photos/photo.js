@@ -1,8 +1,7 @@
-export const SpawnedCard = {
-        collectionName: "SpawnedCard",
+export const photo = {
+        collectionName: "photos",
         schema: {
                 bsonType: "object",
-                required: ["refVariantCard", "moveSet"],
                 properties: {
                         _id: { bsonType: "objectId" },
                         refVariantCard: {
@@ -10,13 +9,15 @@ export const SpawnedCard = {
                                 description:
                                         "Reference to the VariantCard document this spawned instance is derived from.",
                         },
-                        moveSet: {
-                                bsonType: "array",
-                                items: { bsonType: "objectId" },
-                                description:
-                                        "Array of references to Move documents defining the card's abilities or actions.",
+                        path: {
+                                bsonType: "objectId",
+                                description: "Path to the image file",
                         },
                         createdAt: {
+                                bsonType: "Date",
+                                default: Date.now,
+                        },
+                        updatedAt: {
                                 bsonType: "Date",
                                 default: Date.now,
                         },
