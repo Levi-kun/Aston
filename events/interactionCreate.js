@@ -23,6 +23,10 @@ module.exports = {
                                 }
                         }
 
+                        if (command.category === "admin" && interaction.user.id !== process.env.OWNERID) {
+                                return interaction.reply({content: "You are not authorized to use this command.", ephemeral: true});
+                        }
+
                         const { cooldowns } = interaction.client;
 
                         if (!cooldowns.has(command.data.name)) {

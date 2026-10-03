@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ownerId } = require("../../config.json");
 const eventEmitter = require("../../src/eventManager");
+
 
 module.exports = {
 	category: "admin",

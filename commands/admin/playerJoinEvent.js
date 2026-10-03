@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ownerId } = require("../../config.json");
 
 module.exports = {
 	category: "admin",

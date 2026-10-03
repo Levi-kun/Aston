@@ -1,10 +1,8 @@
 const fs = require("node:fs");
-
 const util = require("util");
-
 const path = require("node:path");
-
 const bot = require("./client.js");
+
 require("dotenv").config();
 
 const token = process.env.TOKEN;
@@ -25,17 +23,12 @@ for (const file of eventFiles) {
 }
 
 function getTimeStamp(dateObject) {
-	// current year
+
 	const year = dateObject.getFullYear();
-
-	// current hours
 	const hours = dateObject.getHours();
-
-	// current minutes
 	const minutes = dateObject.getMinutes();
-	const timestamp = Date.now();
-	// current seconds
 	const seconds = dateObject.getSeconds();
+	const timestamp = Date.now();
 
 	return `${year}-${hours}-${minutes}-${seconds}-${timestamp}`;
 }
@@ -46,7 +39,6 @@ const logFile = fs.createWriteStream(
 	{ flags: "a" }
 );
 
-// Create a console logger that writes to the file
 const logStdout = process.stdout;
 
 console.log = function () {

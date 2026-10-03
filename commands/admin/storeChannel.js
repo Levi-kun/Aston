@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
-const { ownerId } = require("../../config.json");
 
 const outputDir = path.join(__dirname, "../../output");
 
