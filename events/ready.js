@@ -4,15 +4,23 @@ const fs = require("fs");
 const path = require("path");
 const { collectSchemasAndCreateDB } = require(`../src/createCollections`);
 
+/**
+ * 
+ *      This is the ready.js file, that handles the ready event
+ *      The ready event happens once, and at the start of the bot's runtime
+ * 
+ */
+
 module.exports = {
         name: Events.ClientReady,
         once: true,
         execute(client) {
-                /*
+
+        /*
 
         *
 
-       DataBases
+                Starts DataBases
 
         *
 
@@ -20,11 +28,11 @@ module.exports = {
 
                 collectSchemasAndCreateDB(path.resolve(__dirname, "../databases"));
 
-                /*
+        /*
 
         *
 
-       Commands
+                Hooks into Commands
 
         *
 
@@ -38,13 +46,12 @@ module.exports = {
                 const foldersPath = path.join(__dirname, "../commands");
                 const commandFolders = fs.readdirSync(foldersPath);
 
+                /** For loop for hooking into the commands in the command folder expects commands to be placed in a <category folder>/<commandName>.js */
                 for (const folder of commandFolders) {
-                        // Grab all the command files from the commands directory you created earlier
                         const commandsPath = path.join(foldersPath, folder);
                         const commandFiles = fs
                                 .readdirSync(commandsPath)
                                 .filter((file) => file.endsWith(".js"));
-                        // Grab the SlashCommandBuilder#toJSON() output of each command's data for deployment
                         for (const file of commandFiles) {
                                 const filePath = path.join(commandsPath, file);
                                 const command = require(filePath);
@@ -58,7 +65,7 @@ module.exports = {
                                 }
                         }
                 }
-
+                
                 console.log("  ############");
                 console.log(
                         " ##############        #####          ####          ####     #####              ##############",

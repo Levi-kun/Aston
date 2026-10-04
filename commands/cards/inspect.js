@@ -10,7 +10,12 @@ const {
 const { OwnedCard, Card } = require("../../classes/cardManager.js");
 const { Query } = require("../../databases/query.js");
 const { ObjectId } = require("mongodb");
-
+/**
+ * 
+ * 	This is the command for inspecting a card, this shows a card.
+ * 	usage: /inspect <card name> <<user>>
+ * 	
+ */
 module.exports = {
 	category: "cards",
 	cooldown: 10,

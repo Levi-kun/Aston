@@ -1,5 +1,9 @@
 const { Client, Collection, GatewayIntentBits } = require("discord.js");
 
+/**
+ *  This file creates and exports the discord Client Object
+ */
+
 class MyClient extends Client {
 	constructor(options) {
 		super(options);

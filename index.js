@@ -7,11 +7,18 @@ require("dotenv").config();
 
 const token = process.env.TOKEN;
 
+
+
+/**
+ * 
+ * 	This 'turns' the bot on, by hooking into the events located in the events/ folder
+ * 
+ */
+
 const eventsPath = path.join(__dirname, "events");
 const eventFiles = fs
 	.readdirSync(eventsPath)
 	.filter((file) => file.endsWith(".js"));
-
 for (const file of eventFiles) {
 	const filePath = path.join(eventsPath, file);
 	const event = require(filePath);
@@ -22,14 +29,19 @@ for (const file of eventFiles) {
 	}
 }
 
-function getTimeStamp(dateObject) {
+/**
+ * 
+ *  this is for logging
+ *	it creats a file and sets them up by this format {years-hours-minutes-seconds-timestamp}
+ *  and all console prints will be logged by date/time.
+ */
 
+function getTimeStamp(dateObject) {
 	const year = dateObject.getFullYear();
 	const hours = dateObject.getHours();
 	const minutes = dateObject.getMinutes();
 	const seconds = dateObject.getSeconds();
 	const timestamp = Date.now();
-
 	return `${year}-${hours}-${minutes}-${seconds}-${timestamp}`;
 }
 

@@ -8,7 +8,6 @@ const { Query } = require("../databases/query.js");
 const { Card } = require("../classes/cardManager.js");
 const eventEmitter = require("../src/eventManager");
 const { ObjectId } = require("mongodb");
-const version = 1; // version header
 
 function chooseRank(rarity) {
 	const keys = Object.keys(rarity);

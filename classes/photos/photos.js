@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import axios from "axios";
 
 export class photo {
         constructor(photoQuery) {
@@ -41,7 +40,7 @@ export class photo {
         }
 
         async __downloadFromUrl(url) {
-                const response = await axios.get(url, { responseType: "arraybuffer" });
+                const response = await fetch(url, { responseType: "arraybuffer" });
                 return Buffer.from(response.data);
         }
 

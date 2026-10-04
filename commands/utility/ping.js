@@ -1,5 +1,9 @@
 const { SlashCommandBuilder } = require("discord.js");
-
+/**
+ * 
+ *  Ping command! Typical ping calculation!
+ * 
+ */
 module.exports = {
     category: "utility",
     cooldown: 10,

@@ -8,7 +8,12 @@ const {
     AttachmentBuilder,
     ChannelType,
 } = require("discord.js");
-
+/**
+ * 
+ *  Funny Joke Command of Moving someone from one VC to another dedicated VC
+ *  usage: /van <user> <vc> <reason>
+ * 
+ */
 module.exports = {
     cooldown: 2.5,
     category: "fun",

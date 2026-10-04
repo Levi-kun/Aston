@@ -27,6 +27,8 @@ module.exports = {
                                 return interaction.reply({content: "You are not authorized to use this command.", ephemeral: true});
                         }
 
+                        if (command.category === "example") return interaction.reply({content: "This is in the example category! Change the category!", ephemeral: true});
+
                         const { cooldowns } = interaction.client;
 
                         if (!cooldowns.has(command.data.name)) {
