@@ -4,8 +4,6 @@ const config = require("../config.json");
 const { Query } = require("../databases/query.js");
 const configA = require("../config.json");
 
-const { ObjectId } = require("mongodb");
-
 const version = configA.version;
 
 module.exports = {

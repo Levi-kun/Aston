@@ -1,7 +1,7 @@
 const { Events, Collection } = require("discord.js");
-const { ownerId } = require("../config.json");
 const { Query } = require("../databases/query.js");
 const logQuery = new Query("interactionEvents");
+
 module.exports = {
         name: Events.InteractionCreate,
         async execute(interaction) {
@@ -23,7 +23,7 @@ module.exports = {
                                 }
                         }
 
-                        if (command.category === "admin" && interaction.user.id !== process.env.OWNERID) {
+                        if (command.category === "admin" && interaction.user.id !== process.env.OWNER_ID) {
                                 return interaction.reply({content: "You are not authorized to use this command.", ephemeral: true});
                         }
 
@@ -42,7 +42,7 @@ module.exports = {
                                 (command.cooldown ?? defaultCooldownDuration) * 1000;
 
                         if (timestamps.has(interaction.user.id)) {
-                                if (interaction.user.id === ownerId) {
+                                if (interaction.user.id === process.env.OWNER_ID) {
                                         return;
                                 }
                                 const expirationTime =
