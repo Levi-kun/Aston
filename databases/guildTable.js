@@ -1,5 +1,3 @@
-// postgresql://[user[:password]@][host][:port][/dbname][?paramspec]   
-
 /**
  *  Holds the Guild Table Creation for PG
  */

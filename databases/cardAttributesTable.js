@@ -4,10 +4,10 @@
 
 module.exports = {
     content: `
-    CREATE TABLE IF NOT EXISTS cardToAttributes (
-        id SERIAL NOT NULL PRIMARY KEY,
-        card_id INT NOT NULL REFERENCE masterCards(id) ON DELETE CASCADE,
-        attribute_id INT NOT NULL REFERENCE abilities(id) ON DELETE CASCADE,
+    CREATE TABLE IF NOT EXISTS card_to_attributes (
+        card_id INT NOT NULL REFERENCES master_cards(id) ON DELETE CASCADE,
+        attribute_id INT NOT NULL REFERENCES abilities(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (card_id, attribute_id)
     )`
 }
