@@ -6,13 +6,17 @@ class Card {
  }
 
  static async spawn(cardId) {
-    return await new Card(await grabCardData(cardId));
+    return await new Card(await this.grabCardData(cardId));
  }
 
 
 async grabCardData(cardId) {
   const [cardData] = await sql`SELECT * FROM cards WHERE id = ${cardId}`;
   return cardData;
+}
+
+   clone() {
+   return new Card(structuredClone({...this}));
 }
 
 }
