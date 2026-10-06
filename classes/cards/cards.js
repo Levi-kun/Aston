@@ -10,15 +10,22 @@ class Card {
  }
 
 
-async grabCardData(cardId) {
+static async grabCardData(cardId) {
   const [cardData] = await sql`SELECT * FROM cards WHERE id = ${cardId}`;
   return cardData;
 }
 
    clone() {
-   return new Card(structuredClone({...this}));
+   return new CloneCard(structuredClone({...this}));
 }
 
+}
+
+class CloneCard extends Card {
+   constructor(row) {
+      super(row);
+      this.temporary = true;
+   }
 }
 
 module.exports = Card;
