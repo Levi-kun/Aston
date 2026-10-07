@@ -9,6 +9,6 @@ module.exports = {
         name VARCHAR(25) NOT NULL,
         base_description TEXT NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )`
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
 }

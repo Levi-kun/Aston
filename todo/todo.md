@@ -1,15 +1,19 @@
 # a todo list for my card bot
 
 - [ ] Create the rarity structure
-- [ ] Create the card render pipeline
+- [ x ] Create the card render pipeline
 - [ ] Redo the Inspect Card
 - [ ] User customization:
-- - [ ] Heart Feature
-- - [ ] Shine
+- - [ x ] Heart Feature
+- - [ x ] Shine
 - - [ ] Attunement
 - - [ ] Cosmetic Finishes
-- - [ ] Alternate Categories
+- - [ x ] Alternate Categories
 
 (: More ideas soon!
+
+## !!! IMPORTANT
+
+- [ ] READ OVER THE AI photo.js CODE FOR ANY ERRORS OR BUGS, and to just you know understand what it does. (inspect the innerworkings)
 
 - Levi

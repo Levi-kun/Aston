@@ -12,6 +12,7 @@ module.exports = {
         shine FLOAT8 NOT NULL,
         xp INT NOT NULL,
         level INT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )`
+        mint INT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
 }

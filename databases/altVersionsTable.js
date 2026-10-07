@@ -9,7 +9,8 @@ module.exports = {
         name TEXT NOT NULL
         rarity INT NOT NULL,
         description_change TEXT NOT NULL,
+        modification BSON,
         is_nsfw BOOL NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )`
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
 }

@@ -10,5 +10,5 @@ module.exports = {
         tier INT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (guild_id)
-    )`
+    );`
 }

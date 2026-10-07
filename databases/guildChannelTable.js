@@ -10,5 +10,5 @@ module.exports = {
         channel_type VARCHAR(25) NOT NULL,
         created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
         PRIMARY KEY (guild_id, channel_id)
-    )`
+    );`
 }

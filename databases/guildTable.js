@@ -8,5 +8,5 @@ module.exports = {
         id VARCHAR(25) NOT NULL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`
+    );`
 }

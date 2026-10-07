@@ -5,10 +5,9 @@
 module.exports = {
     content: `
     CREATE TABLE IF NOT EXISTS photo_per_card (
-        id SERIAL NOT NULL PRIMARY KEY,
-        card_id INT NOT NULL REFERENCES master_cards(id),
-        rarity INT NOT NULL,
-        location TEXT NOT NULL,
+        card_id INT NOT NULL REFERENCES cards(id),
+        photo_id INT NOT NULL REFERENCES photos(id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )`
+        PRIMARY KEY (card_id)
+    );`
 }

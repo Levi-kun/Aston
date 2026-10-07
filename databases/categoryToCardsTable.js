@@ -8,6 +8,6 @@ module.exports = {
         id SERIAL NOT NULL PRIMARY KEY,
         card_id INT NOT NULL REFERENCES master_cards(id) ON DELETE CASCADE,
         category TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )`
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
 }
