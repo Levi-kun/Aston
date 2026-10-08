@@ -188,6 +188,7 @@ class Photo {
 		this.art = "temp/art.png";
 		this._artSet = false;
 		this.desc = "";
+		this.titles = [];
 		this.sr = 0.5;
 		this.likes = 0;
 		this.variation = {};
@@ -199,9 +200,13 @@ class Photo {
 		this.rarity = i; this._cache = {};
 		return this;
 	}
-	addPhoto(url) { this.art = url; this._artSet = true; this._cache = {}; return this; }
+	addPhoto(url) { this.art = url; this._artSet = true; this._artBuf = null; this._cache = {}; return this; }
 	addDescription(s) { this.desc = s; this._cache = {}; return this; }
-	addShine(v) { this.sr = v > 1 ? v / 100 : v; return this; }
+	addTitles(titles) {
+		this.titles = Array.isArray(titles) ? titles.map(title => typeof title === "string" ? title : title?.name).filter(Boolean) : [];
+		return this;
+	}
+	addShine(v) { this.sr = v > 1 ? v / 100 : v; this._cache = {}; return this; }
 	addName(s) { this.name = s; this._cache = {}; return this; }
 	addLevel(i) { this.level = i; this._cache = {}; return this; }
 	addMint(i) { this.mint = String(i); this._cache = {}; return this; }
@@ -232,6 +237,15 @@ class Photo {
 	async render() {
 		if (this.animated) return this._renderGif();
 		return this._renderFrame(null);
+	}
+
+	async renderBase() {
+		return this._renderBaseFrame(null);
+	}
+
+	async renderFinal(baseBuffer) {
+		if (!Buffer.isBuffer(baseBuffer)) throw new TypeError("Photo: renderFinal() expects a base image Buffer");
+		return this._renderFinalFrame(baseBuffer);
 	}
 
 	// ---------------- internals ----------------
@@ -382,10 +396,6 @@ class Photo {
 			tracked(fonts().sansBold, this.mint, { size: 18, cx: IX1 - 16 - rightW / 2, cy: srY, tracking: 2, fill: C.bodyBright }) + `</g>`;
 		C.bottom = await rasterize(`${svgOpen}${brow}</svg>`);
 
-		C.labels = await rasterize(`${svgOpen}` +
-			squeeze(fonts().sansBold, `LVL ${this.level}`, { size: 24, baselineY: IY0 + 40, x: IX0 + 16, align: "left" }) +
-			squeeze(fonts().sansBold, this.masterNo, { size: 24, baselineY: IY0 + 40, x: IX1 - 16, align: "right" }) + `</svg>`);
-
 		C.rainbow = await sharp(rainbow256(), { raw: { width: 256, height: 256, channels: 3 } }).resize(W, H).raw().toBuffer();
 		const meta = await sharp(artBuf).metadata();
 		C.meta = meta;
@@ -400,7 +410,7 @@ class Photo {
 		return C;
 	}
 
-	async _renderFrame(t) {
+	async _renderBaseFrame(t) {
 		const C = await this._static();
 		const sr = this.sr, artH = C.artH, sheetTop = C.sheetTop, meta = C.meta;
 		const artBuf = await this._artBuffer();
@@ -424,9 +434,23 @@ class Photo {
 			{ input: C.sheet }, { input: C.text },
 			{ input: C.bottom, blend: "lighten" },
 			...shine.map(b => ({ input: b })),
-			{ input: C.labels },
 		];
 		return sharp(C.base).composite(composites).png().toBuffer();
+	}
+
+	async _renderFinalFrame(baseBuffer) {
+		const artH = Math.round(IH * this.artFrac);
+		const sheetTop = this.artFrac < 1 ? IY0 + artH - 40 : IY1 - 240;
+		const titleText = this.titles.join(" / ");
+		const labels = await rasterize(`${svgOpen}` +
+			squeeze(fonts().sansBold, `LVL ${this.level}`, { size: 24, baselineY: IY0 + 40, x: IX0 + 16, align: "left" }) +
+			squeeze(fonts().sansBold, this.masterNo, { size: 24, baselineY: IY0 + 40, x: IX1 - 16, align: "right" }) +
+			(titleText ? tracked(fonts().sansBold, titleText, { size: 16, cx: W / 2, cy: sheetTop + 52, fill: css(this.versionColor) }) : "") + `</svg>`);
+		return sharp(baseBuffer).composite([{ input: labels }]).png().toBuffer();
+	}
+
+	async _renderFrame(t) {
+		return this._renderFinalFrame(await this._renderBaseFrame(t));
 	}
 
 	async _renderGif() {

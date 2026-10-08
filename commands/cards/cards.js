@@ -21,7 +21,7 @@ async function createCardObjects (id, userId) {
   WHERE c.card_id = ${id}
   ORDER BY c.id;
 `;
-	const cards = await Promise.all(cardsIds.map(row => Card.spawn(row.id)));
+	const cards = await Promise.all(cardIds.map(row => Card.spawn(row.id, userId)));
 
 	return cards;
 

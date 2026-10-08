@@ -1,24 +1,26 @@
 const sql = require("../../databases/index.js");
-const sql = require(`../../databases/index.js`);
-const { Photo } = require(`../photos/photos.js`)
+const { PhotoManager } = require("../photos/photoManager.js");
 
 class Card { 
  constructor(row) {
     Object.assign(this, row)
  }
 
- static async spawn(cardId) {
-    return await new Card(await this.grabCardData(cardId));
+ static async spawn(cardId, userId) {
+      return await new Card(await this.grabCardData(cardId, userId));
  }
 
 
-static async grabCardData(cardId) {
+static async grabCardData(cardId, userId) {
   const [cardData] = await sql`
     SELECT cards.*, master_cards.name, claiming.user_id AS owner_id
     FROM cards
     JOIN master_cards ON master_cards.id = cards.card_id
-    LEFT JOIN claiming ON claiming.card_id = cards.id
-    WHERE cards.id = ${cardId};
+      LEFT JOIN claiming ON claiming.card_id = cards.id
+         AND (${userId ?? null}::varchar IS NULL OR claiming.user_id = ${userId ?? null})
+      WHERE cards.id = ${cardId}
+      ORDER BY claiming.created_at
+      LIMIT 1;
   `;
   return cardData;
 }
@@ -57,21 +59,8 @@ static async grabCardData(cardId) {
       return query;
    }
 
-   async render_card() {
-      const card = new Photo()
-      .addPhoto(await this._grab_photo())
-      .setRarity(await this._find_rarity())      
-      .addName(this.name)
-      .addDescription(this.description)
-      .addShine(this.shine)                   
-      .addLevel(this.level)
-      .addMint(await this.mint)
-      .addLikes(await this._find_Likes())
-      .setVariation(await this._grab_variation());
-      
-      const buf = await card.render();   
-      
-      return buf;
+   async render_card(userId = this.owner_id) {
+      return new PhotoManager().requestPhoto(this.id, userId);
    }
 
    // TODO! ADD A CONTRIBTUION CALCULATOR TO PLAYER'S XP
