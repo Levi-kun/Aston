@@ -6,9 +6,9 @@ module.exports = {
     content: `
     CREATE TABLE IF NOT EXISTS enabled_cards (
         card_id INT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id VARCHAR(25) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         enabled BOOL NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEYS (card_id, user_id)
+        PRIMARY KEY (card_id, user_id)
     );`
 }
