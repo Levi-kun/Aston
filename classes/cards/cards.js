@@ -1,3 +1,4 @@
+const sql = require("../../databases/index.js");
 const sql = require(`../../databases/index.js`);
 const { Photo } = require(`../photos/photos.js`)
 
@@ -12,7 +13,13 @@ class Card {
 
 
 static async grabCardData(cardId) {
-  const [cardData] = await sql`SELECT cards.*, master_cards.name FROM cards JOIN master_cards ON master_cards.id = cards.card_id WHERE cards.id = ${cardId};`;
+  const [cardData] = await sql`
+    SELECT cards.*, master_cards.name, claiming.user_id AS owner_id
+    FROM cards
+    JOIN master_cards ON master_cards.id = cards.card_id
+    LEFT JOIN claiming ON claiming.card_id = cards.id
+    WHERE cards.id = ${cardId};
+  `;
   return cardData;
 }
 
@@ -44,6 +51,12 @@ static async grabCardData(cardId) {
       return query;
    }
 
+   async change_card_state() {
+      const [query] = sql`UPDATE enabled_cards SET enabled = NOT enabled WHERE card_id = ${this.id} AND user_id ${this.owner_id}`
+      
+      return query;
+   }
+
    async render_card() {
       const card = new Photo()
       .addPhoto(await this._grab_photo())
@@ -60,6 +73,20 @@ static async grabCardData(cardId) {
       
       return buf;
    }
+
+   // TODO! ADD A CONTRIBTUION CALCULATOR TO PLAYER'S XP
+   /**
+    *    XP = 5%
+    *    SHINE = 10%
+    *    BASE_SPAWN_RATE = 40%
+    *    RARITY = 40%
+    *    LIKES = 5%
+    * 
+    *    Augmented by:
+    *    - Titles [multipliers]
+    *    - User Based Boosts
+    *    
+    */
 
 }
 

@@ -13,6 +13,7 @@ module.exports = {
         xp INT NOT NULL,
         level INT NOT NULL,
         mint INT NOT NULL,
+        residual_value INT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`
 }
