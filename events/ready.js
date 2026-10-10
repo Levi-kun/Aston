@@ -2,7 +2,7 @@ const { Events, ActivityType } = require("discord.js");
 const clientF = require("../client.js");
 const fs = require("fs");
 const path = require("path");
-const { collectSchemasAndCreateDB } = require(`../src/createCollections`);
+const { createAtStartTables } = require(`../src/createDatabases.js`)
 
 /**
  * 
@@ -14,19 +14,13 @@ const { collectSchemasAndCreateDB } = require(`../src/createCollections`);
 module.exports = {
         name: Events.ClientReady,
         once: true,
-        execute(client) {
+        async execute(client) {
 
         /*
-
-        *
-
-                Starts DataBases
-
-        *
-
+                Create DBs
         */
-
-                collectSchemasAndCreateDB(path.resolve(__dirname, "../databases"));
+               
+                await createAtStartTables();
 
         /*
 

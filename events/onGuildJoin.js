@@ -1,21 +1,10 @@
 const { Events } = require("discord.js");
-const config = require("../config.json");
 
-const { Query } = require("../databases/query.js");
-const configA = require("../config.json");
-
-const version = configA.version;
+const version = process.env.VERSION;
 
 module.exports = {
 	name: Events.GuildCreate,
 	async execute(guild) {
-		const guildQuery = new Query("guildDataBase");
-		const userQuery = new Query("userDataBase");
-
-		const checkQuery = {
-			id: guild.id,
-		};
-
 		try {
 			const textChannel = guild.channels.cache.find(
 				(channel) =>
@@ -40,72 +29,42 @@ module.exports = {
 			const gainADAY = config.default_values.gainADAY || 0;
 			const searchADAY = config.default_values.searchADAY || 0;
 
-			// Only check the database if guild ID exists
 			if (guildId) {
-				const exist = await guildQuery.readOne(checkQuery);
+				/*
+				//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "readOne", args: [{ id: guildId }] } INFORMATION.
+				RECREATE THIS IN DB,
 
-				if (Object.keys(exist).length === 0) {
-					// Create the base of the creationQuery
-					const creationQuery = {
-						_id: new ObjectId(),
-						id: guildId,
-						name: guildName,
-						amountofUsers: guildUserCount,
-						gainADAY: gainADAY,
-						searchADAY: searchADAY,
-						version: 0,
-						pro: false,
-					};
+				-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-					await guildQuery.insertOne(creationQuery);
+				*/
+				/*
+				//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "insertOne", args: [{ _id: "generated ID", id: guildId, name: guildName, amountofUsers: guildUserCount, gainADAY, searchADAY, version: 0, pro: false }] } INFORMATION.
+				RECREATE THIS IN DB,
 
-					// Only add channelInformation if textChannel exists
-					if (textChannel) {
-						await guildQuery.updateChannelId(
-							guildId,
-							textChannel.id,
-							"default"
-						);
-					}
-					console.log(
-						`Guild ${guildName} (${guildId}) added to database.`
-					);
-				} else {
-					console.log(
-						`Guild ${exist.name} (${exist._id}) already exists in database.`
-					);
-				}
+				-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-				// Fetch all members in the guild
-				guild.members.fetch().then(async (members) => {
-					const userInsertions = members.map(async (member) => {
-						const userId = member.user.id;
-						const userCheckQuery = {
-							id: userId,
-							_guild_id: guild.id,
-						};
+				*/
+				/*
+				//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "updateChannelId", args: [guildId, textChannel.id, "default"] } INFORMATION.
+				RECREATE THIS IN DB,
 
-						const userExists = await userQuery.checkOne(
-							userCheckQuery
-						);
-						if (userExists) return;
+				-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-						const userName = member.user.username || "Unknown";
-						const userQueryData = {
-							id: userId,
-							_guild_id: guildId,
-							name: userName,
-							wins: 0,
-							losses: 0,
-						};
-						return userQuery.insertOne(userQueryData);
-					});
+				*/
+				/*
+				//** TO DO! CONTACTED DATABASE WITH { collection: "userDataBase", operation: "checkOne", args: [{ id: member.user.id, _guild_id: guild.id }] } INFORMATION.
+				RECREATE THIS IN DB,
 
-					await Promise.all(userInsertions);
-					console.log(
-						`All members of guild ${guildName} have been added to the userDataBase.`
-					);
-				});
+				-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+				*/
+				/*
+				//** TO DO! CONTACTED DATABASE WITH { collection: "userDataBase", operation: "insertOne", args: [{ id: member.user.id, _guild_id: guildId, name: member.user.username || "Unknown", wins: 0, losses: 0 }] } INFORMATION.
+				RECREATE THIS IN DB,
+
+				-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+				*/
 			}
 		} catch (error) {
 			console.error("Error executing guildCreate event:", error);

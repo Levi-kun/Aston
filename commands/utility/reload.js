@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 
 module.exports = {
     category: "utility",
@@ -15,7 +15,7 @@ module.exports = {
         if (!interaction.user.id === `${218161367562190849}`)
             return interaction.reply({
                 content: "You are not the owner!",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         const commandName = interaction.options
             .getString("command", true)

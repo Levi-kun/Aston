@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
@@ -23,7 +23,7 @@ module.exports = {
                         if (interaction.user.id !== ownerId) {
                                 return interaction.reply({
                                         content: "You are not authorized to use this command.",
-                                        ephemeral: true,
+                                        flags: MessageFlags.Ephemeral,
                                 });
                         }
 

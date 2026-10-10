@@ -6,6 +6,7 @@ const {
     ButtonStyle,
     ActionRowBuilder,
     ChannelType,
+    MessageFlags,
 } = require("discord.js");
 
 module.exports = {
@@ -82,7 +83,7 @@ module.exports = {
         const helpResponse = await interaction.reply({
             content: helpMessage,
             components: [row],
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
 
         const nextconfirmation =
@@ -99,7 +100,6 @@ module.exports = {
             page += 1;
             await interaction.editReply({
                 content: helpMessage,
-                ephemeral: true,
             });
         });
 
@@ -108,7 +108,6 @@ module.exports = {
 
             await interaction.editReply({
                 content: helpMessage,
-                ephemeral: true,
             });
         });
     },

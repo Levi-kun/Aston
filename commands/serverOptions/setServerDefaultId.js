@@ -1,7 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { Query } = require("../../databases/query.js");
-
-const guildQuery = new Query("guildDataBase");
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
 
 module.exports = {
     category: "server",
@@ -21,14 +18,17 @@ module.exports = {
         const channelId = interaction.options.getChannel("channel");
 
         if (channelId) {
-            await guildQuery.updateChannelId(
-                interaction.guild.id,
-                channelId.id
-            );
             await interaction.reply({
-                content: `${interaction.member.displayName}, ${channelId} is now the new default channel!`,
-                ephemeral: true,
+                content: `${interaction.member.displayName}, saving the default channel is unavailable until the database migration is complete.`,
+                flags: MessageFlags.Ephemeral,
             });
+            /*
+            //** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "updateChannelId", args: [interaction.guild.id, channelId.id] } INFORMATION.
+            RECREATE THIS IN DB,
+
+            -- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+            */
         } else {
             await interaction.reply("Boss, something went wrong...");
         }

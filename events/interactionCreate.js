@@ -1,14 +1,11 @@
-const { Events, Collection } = require("discord.js");
-const { Query } = require("../databases/query.js");
-const logQuery = new Query("interactionEvents");
+const { Events, Collection, MessageFlags } = require("discord.js");
 
 module.exports = {
         name: Events.InteractionCreate,
         async execute(interaction) {
-                let start = Date.now();
-                if (!interaction.isChatInputCommand && !interaction.isAutocomplete)
+                if (!interaction.isChatInputCommand() && !interaction.isAutocomplete())
                         return;
-                if (interaction.isChatInputCommand) {
+                if (interaction.isChatInputCommand()) {
                         const command = interaction.client.commands.get(
                                 interaction.commandName,
                         );
@@ -24,10 +21,10 @@ module.exports = {
                         }
 
                         if (command.category === "admin" && interaction.user.id !== process.env.OWNER_ID) {
-                                return interaction.reply({content: "You are not authorized to use this command.", ephemeral: true});
+                                return interaction.reply({content: "You are not authorized to use this command.", flags: MessageFlags.Ephemeral});
                         }
 
-                        if (command.category === "example") return interaction.reply({content: "This is in the example category! Change the category!", ephemeral: true});
+                        if (command.category === "example") return interaction.reply({content: "This is in the example category! Change the category!", flags: MessageFlags.Ephemeral});
 
                         const { cooldowns } = interaction.client;
 
@@ -42,18 +39,16 @@ module.exports = {
                                 (command.cooldown ?? defaultCooldownDuration) * 1000;
 
                         if (timestamps.has(interaction.user.id)) {
-                                if (interaction.user.id === process.env.OWNER_ID) {
-                                        return;
-                                }
                                 const expirationTime =
                                         timestamps.get(interaction.user.id) + cooldownAmount;
 
                                 if (now < expirationTime) {
                                         const expiredTimestamp = Math.round(expirationTime / 1_000);
-                                        return interaction.reply({
+                                        await interaction.reply({
                                                 content: `Please wait, you are on a cooldown for \`${command.data.name}\`. You can use it again <t:${expiredTimestamp}:R>.`,
-                                                ephemeral: true,
+                                                flags: MessageFlags.Ephemeral,
                                         });
+                                        return;
                                 }
                         }
 
@@ -65,51 +60,21 @@ module.exports = {
 
                         try {
                                 await command.execute(interaction);
-
-                                const reaction_time = Date.now() - start;
-                                const noqueryInfo = {
-                                        // Generate a new objectId for the interaction log
-                                        interactionType: `${interaction.type}`, // E.g., 'APPLICATION_COMMAND' or 'MESSAGE_COMPONENT'
-                                        commandName: interaction.commandName, // Use command name or custom ID
-                                        user_id: {
-                                                id: interaction.user.id,
-                                                name: interaction.user.username,
-                                        },
-                                        created_at: new Date(), // Log the time of the interaction
-                                        reaction_time: reaction_time, // Log the ping time
-                                        error: "null", // Log internal speed of command execution
-                                };
-
-                                await logQuery.insertOne(noqueryInfo);
                         } catch (error) {
                                 console.error(error);
                                 if (interaction.replied || interaction.deferred) {
                                         await interaction.followUp({
                                                 content:
                                                         "There was an error while executing this command!",
-                                                ephemeral: true,
+                                                flags: MessageFlags.Ephemeral,
                                         });
                                 } else {
                                         await interaction.reply({
                                                 content:
                                                         "There was an error while executing this command!",
-                                                ephemeral: true,
+                                                flags: MessageFlags.Ephemeral,
                                         });
                                 }
-                                const reaction_time = Date.now() - start;
-                                const queryInfo = {
-                                        // Generate a new objectId for the interaction log
-                                        interactionType: `${interaction.type}`, // E.g., 'APPLICATION_COMMAND' or 'MESSAGE_COMPONENT'
-                                        commandName: interaction.commandName, // Use command name or custom ID
-                                        user_id: {
-                                                id: interaction.user.id,
-                                                name: interaction.user.username,
-                                        },
-                                        created_at: new Date(), // Log the time of the interaction
-                                        reaction_time: reaction_time, // Log the ping time
-                                        error: `Error: ${error.message}`, // Log the error and execution time
-                                };
-                                await logQuery.insertOne(queryInfo);
                         }
 
                         console.log(

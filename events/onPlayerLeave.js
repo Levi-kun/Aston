@@ -1,34 +1,22 @@
 const { Events } = require("discord.js");
-const { Query } = require("../databases/query.js");
 
 module.exports = {
 	name: Events.GuildMemberRemove, // Event for player leave
 	async execute(member) {
 		console.log(`${member.displayName} has left ${member.guild.name}`);
-		try {
-			const guild = member.guild;
-			const guildId = guild.id;
-			const guildUserCount = guild.memberCount;
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "updateOne", args: [{ id: member.guild.id }, { amountofUsers: member.guild.memberCount }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			// Update the 'amountofUsers' field in the 'guildTable' in MongoDB
-			const guildQuery = new Query("guildDataBase");
-			await guildQuery.updateOne(
-				{ id: guildId },
-				{ amountofUsers: guildUserCount }
-			);
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-			// Deprecate the user document in the userDataBase
-			const userQuery = new Query("userDataBase");
-			await userQuery.updateOne(
-				{ id: member.user.id, _guild_id: guildId },
-				{ deprecated: true }
-			);
+		*/
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "userDataBase", operation: "updateOne", args: [{ id: member.user.id, _guild_id: member.guild.id }, { deprecated: true }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			console.log(
-				`User left guild and deprecated in database: ${member.user.tag}`
-			);
-		} catch (error) {
-			console.error("Error handling user leave event:", error);
-		}
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+		*/
 	},
 };

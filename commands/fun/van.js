@@ -7,6 +7,7 @@ const {
     ButtonStyle,
     AttachmentBuilder,
     ChannelType,
+    MessageFlags,
 } = require("discord.js");
 /**
  * 
@@ -59,14 +60,14 @@ module.exports = {
         if (!targetVoiceState) {
             return interaction.reply({
                 content: `Boss, we can't find him!`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
 
         if (targetVoiceState.id === vanvoicechannel.id) {
             return interaction.reply({
                 content: `Boss, he's already there.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
         const confirm = new ButtonBuilder()
@@ -84,7 +85,7 @@ module.exports = {
         const response = await interaction.reply({
             content: `Waiting on your signal Boss`,
             components: [row],
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
         const collectorFilter = (i) => i.user.id === interaction.user.id;
 
@@ -127,7 +128,7 @@ module.exports = {
         } catch (e) {
             await interaction.followUp({
                 content: "THE BOSS WENT MIA! FOLLOWING PLAN C!",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
     },

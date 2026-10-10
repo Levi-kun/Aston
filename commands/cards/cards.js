@@ -6,6 +6,7 @@ const {
 	ActionRowBuilder,
 	EmbedBuilder,
 	ComponentType,
+	MessageFlags,
 } = require("discord.js");
 const Card = require("../../classes/cards/cards.js");
 const sql = require("../../databases/index.js")
@@ -76,7 +77,7 @@ module.exports = {
 			SELECT id FROM master_cards
 			WHERE LOWER(name) = ${raw.toLowerCase()};`;
 			if (!row) {
-				return await interaction.reply({ content: `No card found with the name "${raw}".`, ephemeral: true });
+				return await interaction.reply({ content: `No card found with the name "${raw}".`, flags: MessageFlags.Ephemeral });
 			}
 			masterCardId = row.id;
 		}

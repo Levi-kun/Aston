@@ -3,66 +3,35 @@ const {
 	ButtonStyle,
 	EmbedBuilder,
 	ActionRowBuilder,
+	MessageFlags,
 } = require("discord.js");
-const { Query } = require("../databases/query.js");
-const { Card } = require("../classes/cardManager.js");
 const eventEmitter = require("../src/eventManager");
-const { ObjectId } = require("mongodb");
-
-function chooseRank(rarity) {
-	const keys = Object.keys(rarity);
-	const weights = Object.values(rarity);
-	const totalWeight = weights.reduce((acc, val) => acc + val, 0);
-	const random = Math.random() * totalWeight;
-	let cumulativeWeight = 0;
-	for (let i = 0; i < keys.length; i++) {
-		cumulativeWeight += weights[i];
-		if (random < cumulativeWeight) {
-			return keys[i];
-		}
-	}
-}
-
-async function canClaimMore(userId, guildId) {
-	const gainLimitQuery = new Query("gainLimitData");
-	const guildQuery = new Query("guildDataBase");
-
-	const guild = await guildQuery.readOne({ id: `${guildId}` });
-	if (!guild) {
-		console.log("Guild not found");
-		return false;
-	} else if (typeof guild.gainADAY !== "number") {
-		console.log("Invalid gainADAY value");
-		return false;
-	}
-
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-
-	const claimsToday = await gainLimitQuery.countDocuments({
-		user_id: userId, // String, no parseInt
-		guild_id: guildId,
-		date: { $gte: today },
-	});
-
-	return claimsToday < guild.gainADAY;
-}
 
 async function recordClaim(userId, guildId) {
-	const gainLimitQuery = new Query("gainLimitData");
-	try {
-		const canClaim = await canClaimMore(userId, guildId);
-		if (!canClaim) return false;
-		await gainLimitQuery.insertOne({
-			user_id: userId, // String, no parseInt
-			guild_id: guildId,
-			date: new Date(),
-		});
-		return true;
-	} catch (error) {
-		console.error("Error recording claim:", error);
-		return false;
-	}
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	/*
+	//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "readOne", args: [{ id: `${guildId}` }] } INFORMATION.
+	RECREATE THIS IN DB,
+
+	-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+	*/
+	/*
+	//** TO DO! CONTACTED DATABASE WITH { collection: "gainLimitData", operation: "countDocuments", args: [{ user_id: userId, guild_id: guildId, date: { $gte: today } }] } INFORMATION.
+	RECREATE THIS IN DB,
+
+	-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+	*/
+	/*
+	//** TO DO! CONTACTED DATABASE WITH { collection: "gainLimitData", operation: "insertOne", args: [{ user_id: userId, guild_id: guildId, date: new Date() }] } INFORMATION.
+	RECREATE THIS IN DB,
+
+	-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+	*/
+	return false;
 }
 
 function capitalizeFirstLetter(str) {
@@ -164,8 +133,8 @@ async function messageCreater(image, card, defaultChannel) {
 					);
 					if (!claimed) {
 						await i.followUp({
-							content: "You maxed out on claims today!",
-							ephemeral: true,
+							content: "Card claiming is unavailable until the database migration is complete.",
+							flags: MessageFlags.Ephemeral,
 						});
 						return;
 					}
@@ -230,7 +199,7 @@ async function messageCreater(image, card, defaultChannel) {
 					);
 					await i.followUp({
 						content: `**Move:** ${move.name}\n**Descriptions:** ${formattedDescription}\n**Cooldown:** ${move.cooldown}	| **Turn Cost:** ${move.turnCost}`,
-						ephemeral: true, // Only visible to the user
+						flags: MessageFlags.Ephemeral, // Only visible to the user
 					});
 				}
 			} catch (innerErr) {
@@ -274,48 +243,35 @@ async function messageCreater(image, card, defaultChannel) {
 module.exports = {
 	name: "spawnInCard",
 	async execute(guild) {
-		try {
-			const query = new Query("animeCardList");
-			const settingsQuery = new Query("settings");
-			const rarity_Settings = await settingsQuery.readOne({
-				rarity_Settings: { $exists: true },
-			});
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "settings", operation: "readOne", args: [{ rarity_Settings: { $exists: true } }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			const cardType = chooseRank(rarity_Settings.rarity_Settings);
-			let card = await query.aggregate(1, {
-				rarity: parseInt(cardType, 10),
-			});
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-			if (!card || card.length === 0) {
-				console.error("Card not found");
-				return;
-			}
+		*/
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "animeCardList", operation: "aggregate", args: [1, { rarity: parseInt(cardType, 10) }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			card = card[0].lv;
-			const adjustedCard = await new Card(card).convertToOwnedCard(
-				guild.id
-			);
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-			const guildQuery = new Query("guildDataBase");
-			const guildData = await guildQuery.readOne({ id: `${guild.id}` });
+		*/
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "readOne", args: [{ id: `${guild.id}` }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			const defaultChannelId = guildData.channelInformation.default._id;
-			const photoQuery = new Query("animeCardPhotos");
-			const photos = await photoQuery.readMany({
-				card_id: new ObjectId(card._id),
-			});
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
 
-			const image = photos.map((photo) => photo.attachment);
+		*/
+		/*
+		//** TO DO! CONTACTED DATABASE WITH { collection: "animeCardPhotos", operation: "readMany", args: [{ card_id: card._id }] } INFORMATION.
+		RECREATE THIS IN DB,
 
-			const defaultChannel = guild.channels.cache.get(defaultChannelId);
-			if (!defaultChannel) {
-				console.error("Default channel not found");
-			} else {
-				await messageCreater(image[0], adjustedCard, defaultChannel);
-			}
-		} catch (err) {
-			console.error(`Error executing spawnInCard: ${err.message}`);
-		}
+		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+
+		*/
+		console.error("Card spawning is unavailable until the database migration is complete.");
 	},
 };
 

@@ -6,10 +6,10 @@ module.exports = {
     content: `
     CREATE TABLE IF NOT EXISTS alt_version (
         id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL
+        name TEXT NOT NULL,
         rarity INT NOT NULL,
         description_change TEXT NOT NULL,
-        modification BSON,
+        modification JSONB,
         is_nsfw BOOL NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 /**
  * 
  *  Ping command! Typical ping calculation!
@@ -11,15 +11,11 @@ module.exports = {
         .setName("ping")
         .setDescription("Replies with Pong!"),
     async execute(interaction) {
-        const sent = await interaction.deferReply({
-            content: `Ping 🏓!`,
-            fetchReply: true,
-            ephemeral: true,
-        });
+        const startedAt = Date.now();
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const responseTime = Date.now() - startedAt;
         await interaction.editReply(
-            `Pong 🏓  *ping: ${Math.round(
-                sent.createdTimestamp - interaction.createdTimestamp
-            )}ms!*`
+            `Pong 🏓  *ping: ${responseTime}ms!*`
         );
     },
 };

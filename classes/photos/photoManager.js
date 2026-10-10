@@ -102,8 +102,16 @@ class PhotoManager {
 		return this._schemaReady;
 	}
 
+	/**
+	 * 
+	 * @param {*} cardId This is the id for the card
+	 * @param {*} userId This is the user id for the card
+	 * @returns It returns, if succesfull, a js object with 
+	 * {id, user_id, master_card_id, alt_version, description, shine, xp, 
+	 *  mint, name, rarity, modification, photo_id, photo_location, likes, titles.{id, name}}
+	 * 
+	 */
 	async _loadCard(cardId, userId) {
-		if (userId == null || userId === "") throw new TypeError("PhotoManager.requestPhoto() requires a user ID");
 		const [row] = await this.sql`
 			SELECT c.id, cl.user_id, c.card_id AS master_card_id, c.alt_version, c.description,
 				c.shine, c.xp, c.level, c.mint, mc.name, av.rarity,
@@ -237,8 +245,24 @@ class PhotoManager {
 		}
 	}
 
+	_paramExists(arg) {
+		if (arg == null || arg === "") {
+
+			new TypeError("PhotoManager.requestPhoto() has a missing argument")
+			return false;
+		
+		} else {
+			return true;
+		}
+	}
+
 	async requestPhoto(cardId, userId) {
+		
+		if(!this._paramExists(userId)) return;
+		if(!this._paramExists(cardId)) return;
+
 		await this._ensureSchema();
+
 		const row = await this._loadCard(cardId, userId);
 		const photo = this._createPhoto(row);
 		const baseState = this._baseState(row, photo);
@@ -246,6 +270,7 @@ class PhotoManager {
 		const finalState = this._finalState(row, baseFingerprint);
 		const finalFingerprint = fingerprint(finalState);
 		const cachedImage = await this._cachedImage(row.id, finalFingerprint);
+
 		if (cachedImage) return { ...cachedImage, reused: true, cardId: row.id, fingerprint: finalFingerprint };
 
 		let buffer;

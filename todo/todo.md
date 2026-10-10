@@ -25,5 +25,6 @@
 
 inspect command
 but also photo lifetime manager
+logging agent
 
 - Levi
