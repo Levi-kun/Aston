@@ -161,7 +161,6 @@ class PhotoManager {
 			name: row.name || "",
 			description: row.description || "",
 			shine: Number(row.shine ?? 0),
-			likes: Number(row.likes ?? 0),
 			mint: String(row.mint ?? 0),
 			rarity: photo.rarity,
 			variation: photo.variation,
@@ -173,6 +172,7 @@ class PhotoManager {
 			rendererVersion: RENDERER_VERSION,
 			baseFingerprint,
 			level: Number(row.level ?? 1),
+			likes: Number(row.likes ?? 0),
 			titles: (row.titles || []).map(title => title.name).filter(Boolean),
 		};
 	}

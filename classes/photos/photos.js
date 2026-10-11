@@ -376,12 +376,6 @@ class Photo {
 		const vy = sheetTop + 25, srY = IY1 - 19;
 		const descFill = v.descriptionColor ? css(v.descriptionColor) : (v.horror ? css([178, 52, 52]) : C.body);
 		let s2 = tracked(fonts().sansBold, this.versionLabel, { size: 20, cx: W / 2, cy: vy, tracking: 4, fill: css(this.versionColor) });
-		// likes counter, top-right of the text box
-		if (this.likes > 0) {
-			const likeTxt = `♥ ${fmtInt(this.likes)}`;
-			const lw = fonts().sans.getWidth(likeTxt, { fontSize: 15 });
-			s2 += tracked(fonts().sans, likeTxt, { size: 15, cx: IX1 - 16 - lw / 2, cy: vy, fill: C.bodyBright, opacity: 0.9 });
-		}
 		const lines = this.description ? wrapBalanced(fonts().serifItalic, this.description, 21, IW - 10) : []; // 5px side padding
 		const lh = 33, descCy = ((vy + 26) + (srY - 22)) / 2;
 		lines.forEach((ln, i) => { s2 += tracked(fonts().serifItalic, ln, { size: 21, cx: W / 2, cy: descCy - (lines.length - 1) * lh / 2 + i * lh, fill: descFill }); });
@@ -441,10 +435,14 @@ class Photo {
 	async _renderFinalFrame(baseBuffer) {
 		const artH = Math.round(IH * this.artFrac);
 		const sheetTop = this.artFrac < 1 ? IY0 + artH - 40 : IY1 - 240;
+		const C = await this._static();
 		const titleText = this.titles.join(" / ");
+		const likeText = this.likes > 0 ? `♥ ${fmtInt(this.likes)}` : "";
+		const likeWidth = likeText ? fonts().sans.getWidth(likeText, { fontSize: 15 }) : 0;
 		const labels = await rasterize(`${svgOpen}` +
 			squeeze(fonts().sansBold, `LVL ${this.level}`, { size: 24, baselineY: IY0 + 40, x: IX0 + 16, align: "left" }) +
 			squeeze(fonts().sansBold, this.masterNo, { size: 24, baselineY: IY0 + 40, x: IX1 - 16, align: "right" }) +
+			(likeText ? tracked(fonts().sans, likeText, { size: 15, cx: IX1 - 16 - likeWidth / 2, cy: sheetTop + 25, fill: C.bodyBright, opacity: 0.9 }) : "") +
 			(titleText ? tracked(fonts().sansBold, titleText, { size: 16, cx: W / 2, cy: sheetTop + 52, fill: css(this.versionColor) }) : "") + `</svg>`);
 		return sharp(baseBuffer).composite([{ input: labels }]).png().toBuffer();
 	}
