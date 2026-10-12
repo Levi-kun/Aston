@@ -1,6 +1,8 @@
 # a todo list for my card bot
 
+- [ ] Recreate the spawn interaction
 - [ ] Create the rarity structure
+- - [ ] Add a rarity class of truth
 - [ x ] Create the card render pipeline
 - [ ] Redo the Inspect Card
 - [ ] User customization:

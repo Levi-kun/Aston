@@ -30,32 +30,27 @@ static async grabCardData(cardId, userId) {
 }
 
    async _grab_photo () {
-      const [query] = await sql`SELECT location FROM photos JOIN photo_per_card.photo_id = photos.id WHERE photo_per_card.card_id = ${this.card_id};`
-
+      const [query] = await sql`SELECT photos.location FROM photos JOIN photo_per_card ON photo_per_card.photo_id = photos.id WHERE photo_per_card.card_id = ${this.card_id};`
       return query;
    }
 
    async _find_likes() {
       const [query] = await sql`SELECT count FROM likes WHERE card_id = ${this.id}`
-   
       return query;
    }
 
    async _grab_variation() {
       const [query] = await sql`SELECT modification FROM alt_Version WHERE id = ${this.alt_version}`
-      
       return query;
    }
 
    async _grab_rarity() {
       const [query] = await sql`SELECT rarity FROM alt_Version WHERE id = ${this.alt_version}`
-      
       return query;
    }
 
    async change_card_state() {
-      const [query] = sql`UPDATE enabled_cards SET enabled = NOT enabled WHERE card_id = ${this.id} AND user_id ${this.owner_id}`
-      
+      const [query] = sql`UPDATE enabled_cards SET enabled = NOT enabled WHERE card_id = ${this.id} AND user_id = ${this.owner_id}`
       return query;
    }
 

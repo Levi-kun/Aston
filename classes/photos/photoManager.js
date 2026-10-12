@@ -4,7 +4,7 @@ const path = require("node:path");
 const sharp = require("sharp");
 const { Photo } = require("./photos.js");
 
-const RENDERER_VERSION = 1;
+const RENDERER_VERSION = 4;
 
 function stableValue(value) {
 	if (Array.isArray(value)) return value.map(stableValue);
@@ -41,6 +41,7 @@ class PhotoManager {
 		this.uploadAttachment = uploadAttachment;
 		this.attachmentCheck = attachmentCheck;
 		this.projectRoot = projectRoot;
+		this.photoRoot = path.resolve(projectRoot, "static", "cards", "images");
 		this.imageRoot = path.resolve(projectRoot, "images", "cards");
 		this._schemaReady = null;
 	}
@@ -138,10 +139,22 @@ class PhotoManager {
 		return row;
 	}
 
+	_resolvePhotoPath(location) {
+		if (typeof location !== "string" || !location || path.isAbsolute(location)) {
+			throw new TypeError("Photo location must be relative to static/cards/images");
+		}
+		const absolutePath = path.resolve(this.photoRoot, location);
+		const relativePath = path.relative(this.photoRoot, absolutePath);
+		if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+			throw new TypeError("Photo location must be relative to static/cards/images");
+		}
+		return absolutePath;
+	}
+
 	_createPhoto(row) {
 		return this.photoFactory()
 			.setRarity(Number(row.rarity ?? 0))
-			.addPhoto(row.photo_location)
+			.addPhoto(this._resolvePhotoPath(row.photo_location))
 			.addName(row.name || "")
 			.addDescription(row.description || "")
 			.addShine(Number(row.shine ?? 0))
@@ -239,8 +252,7 @@ class PhotoManager {
 				const location = await this._writeImage(userId, cardId, filename, jpg, true);
 				return { location, buffer: jpg };
 			} catch (error) {
-				if (error.code !== "EEXIST") throw error;
-				suffix++;
+				throw new Error("Issue creating final Jpeg: ", error);
 			}
 		}
 	}
