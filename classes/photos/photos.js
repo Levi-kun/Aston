@@ -1,11 +1,10 @@
 // photo.js — NOT EVEN HUMAN REVIEWED YET BEWARE!
 //
-// No presets and no machine-specific paths live in this file. All card
-// content comes in through the builder; the paths below are temp
-// placeholders the host project replaces.
+// Card content comes in through the builder. Fonts default to static/fonts
+// and can be overridden by the host project.
 //
 //   const { Photo } = require("./photo.js");
-//   Photo.setFonts({                       // real font files live here
+//   Photo.setFonts({                       // optionally override static/fonts
 //       sansBold: "/path/to/sans-bold.ttf",
 //       sans: "/path/to/sans.ttf",
 //       serifItalic: "/path/to/serif-italic.ttf",
@@ -39,35 +38,39 @@
 //                                          red vignette overlay on the art
 //   { overlay: "red-vignette"|"dark-vignette" }
 //   { shineBoost: 1.5 }                    multiplier on shine intensity
+//   { font: "folder_name" }                font folder under static/fonts (default "base")
 
 const sharp = require("sharp");
 const TextToSVG = require("text-to-svg");
 const { GIFEncoder, quantize, applyPalette } = require("gifenc");
+const path = require("node:path");
 
-const W = 750, H = 1050;
-const IX0 = 30, IY0 = 30, IX1 = 720, IY1 = 1020, IW = 690, IH = 990;
-const XP_PROGRESS = 0.248;
+const W = 710, H = 1030;
+const IX0 = 30, IY0 = 30, IX1 = W - 30, IY1 = H - 30, IW = IX1 - IX0, IH = IY1 - IY0;
 const BG = [20, 20, 24];
 
-// Temp placeholder font paths; the host project provides real ones via Photo.setFonts().
-// Fonts load lazily on first render so requiring this module never touches disk.
-const FONT_PATHS = {
-	sansBold: "temp/fonts/sans-bold.ttf",
-	sans: "temp/fonts/sans.ttf",
-	serifItalic: "temp/fonts/serif-italic.ttf",
-	serifBlackItalic: "temp/fonts/serif-black-italic.ttf",
+// Font files load lazily per folder so requiring this module never touches disk.
+const FONT_ROOT = path.resolve(__dirname, "../../static/fonts");
+const FONT_FILES = {
+	sansBold: "sans-bold.ttf",
+	sans: "sans.ttf",
+	serifItalic: "serif-italic.ttf",
+	serifBlackItalic: "serif-black-italic.ttf",
 };
-let _fonts = null;
-function fonts() {
-	if (!_fonts) {
-		_fonts = {
-			sansBold: TextToSVG.loadSync(FONT_PATHS.sansBold),
-			sans: TextToSVG.loadSync(FONT_PATHS.sans),
-			serifItalic: TextToSVG.loadSync(FONT_PATHS.serifItalic),
-			serifBlackItalic: TextToSVG.loadSync(FONT_PATHS.serifBlackItalic),
-		};
+const FONT_OVERRIDES = {};
+const _fonts = new Map();
+function fonts(folder = "base") {
+	if (typeof folder !== "string" || !/^[A-Za-z0-9_-]+$/.test(folder)) {
+		throw new TypeError("Photo font must be a folder name under static/fonts");
 	}
-	return _fonts;
+	if (!_fonts.has(folder)) {
+		const fontFolder = path.join(FONT_ROOT, folder);
+		_fonts.set(folder, Object.fromEntries(Object.entries(FONT_FILES).map(([key, filename]) => [
+			key,
+			TextToSVG.loadSync(folder === "base" && FONT_OVERRIDES[key] ? FONT_OVERRIDES[key] : path.join(fontFolder, filename)),
+		])));
+	}
+	return _fonts.get(folder);
 }
 
 // Structural defaults per rarity int. No game content lives here; every
@@ -134,6 +137,29 @@ function wrapBalanced(ttsvg, text, size, maxW) {
 		lines[lines.length - 2] = prev.join(" ");
 		lines[lines.length - 1] = moved + " " + lines[lines.length - 1];
 		if (w(lines[lines.length - 1]) > maxW) { lines[lines.length - 2] += " " + moved; lines[lines.length - 1] = lines[lines.length - 1].slice(moved.length + 1); break; }
+	}
+	return lines;
+}
+function wrapTitle(text, maxChars = 12, maxLines = 2) {
+	const words = text.trim().split(/\s+/).filter(Boolean);
+	const lines = [];
+	let current = "", truncated = false;
+	for (const word of words) {
+		for (let offset = 0; offset < word.length; offset += maxChars) {
+			const chunk = word.slice(offset, offset + maxChars);
+			const candidate = current ? `${current} ${chunk}` : chunk;
+			if (candidate.length <= maxChars) current = candidate;
+			else {
+				lines.push(current);
+				current = chunk;
+				if (lines.length === maxLines) { truncated = true; break; }
+			}
+		}
+		if (truncated) break;
+	}
+	if (current && lines.length < maxLines) lines.push(current);
+	if (truncated && lines.length) {
+		lines[lines.length - 1] = `${lines[lines.length - 1].slice(0, maxChars - 3).trimEnd()}...`;
 	}
 	return lines;
 }
@@ -213,8 +239,9 @@ class Photo {
 	addLikes(n) { this.likes = n; this._cache = {}; return this; }
 	setVariation(mod) { this.variation = { ...this.variation, ...(mod || {}) }; this._cache = {}; return this; }
 
-	static setFonts(paths) { Object.assign(FONT_PATHS, paths); _fonts = null; }
+	static setFonts(paths) { Object.assign(FONT_OVERRIDES, paths); _fonts.clear(); }
 	get structure() { return RARITY_STRUCTURE[this.rarity]; }
+	get fontFamily() { return this.variation.font || "base"; }
 	get border() { return this.variation.border || this.structure.border; }
 	get artFrac() { return this.variation.artFrac != null ? this.variation.artFrac : this.structure.artFrac; }
 	get animated() { return this.variation.animated != null ? this.variation.animated : this.structure.animated; }
@@ -222,16 +249,6 @@ class Photo {
 	get description() { return this.desc; }
 	get nameColor() { return this.variation.nameColor || [255, 255, 255]; }
 	get versionColor() { return this.variation.versionColor || [255, 255, 255]; }
-
-	/** Roll an S.R. value: 0-1 with 8 decimal digits, each tenth 10% less likely than the previous. */
-	static rollShine() {
-		const weights = Array.from({ length: 10 }, (_, k) => Math.pow(0.9, k));
-		const total = weights.reduce((a, b) => a + b, 0);
-		let r = Math.random() * total, k = 0;
-		while (r >= weights[k]) { r -= weights[k]; k++; }
-		const v = Math.min(1, k * 0.1 + Math.random() * 0.1);
-		return Math.round(v * 1e8) / 1e8;
-	}
 
 	/** Render the card. PNG for common/rare, animated GIF (32 frames, ~4s loop) for special. */
 	async render() {
@@ -344,6 +361,7 @@ class Photo {
 		const C = this._cache;
 		if (C.done) return C;
 		const v = this.variation;
+		const cardFonts = fonts(this.fontFamily);
 		const sr = this.sr;
 		const artH = Math.round(IH * this.artFrac);
 		const sheetTop = this.artFrac < 1 ? IY0 + artH - 40 : IY1 - 240;
@@ -355,12 +373,20 @@ class Photo {
 		C.scrim = await rasterize(`${svgOpen}<defs><radialGradient id="sc" cx="50%" cy="0%" r="72%" fx="50%" fy="0%"><stop offset="0%" stop-color="black" stop-opacity="0.70"/><stop offset="100%" stop-color="black" stop-opacity="0"/></radialGradient></defs><ellipse cx="${W / 2}" cy="${IY0}" rx="340" ry="175" fill="url(#sc)"/></svg>`);
 
 		// name (horror swaps the font)
-		const nameFont = v.horror ? fonts().serifBlackItalic : fonts().sansBold;
+		const nameFont = v.horror ? cardFonts.serifBlackItalic : cardFonts.sansBold;
 		const nameFill = css(this.nameColor);
 		const shadowFill = v.horror ? "rgba(120,10,10,0.8)" : "black";
-		C.name = await rasterize(`${svgOpen}` +
-			tracked(nameFont, this.name, { size: 58, cx: W / 2 + 2, cy: IY0 + 69, tracking: 7, fill: shadowFill, opacity: v.horror ? 0.8 : 0.67 }) +
-			tracked(nameFont, this.name, { size: 58, cx: W / 2, cy: IY0 + 66, tracking: 7, fill: nameFill }) + `</svg>`);
+		const nameLines = wrapTitle(this.name);
+		const nameSvg = nameLines.map((line, index) => {
+			const tracking = 7, chars = [...line];
+			const glyphWidth = chars.reduce((total, char) => total + nameFont.getWidth(char, { fontSize: 58 }), 0);
+			const trackingWidth = tracking * (chars.length - 1);
+			const size = 58 * Math.min(1, (IW - 32 - trackingWidth) / glyphWidth);
+			const cy = IY0 + 66 + (index - (nameLines.length - 1) / 2) * 60;
+			return tracked(nameFont, line, { size, cx: W / 2 + 2, cy: cy + 3, tracking, fill: shadowFill, opacity: v.horror ? 0.8 : 0.67 }) +
+				tracked(nameFont, line, { size, cx: W / 2, cy, tracking, fill: nameFill });
+		}).join("");
+		C.name = await rasterize(`${svgOpen}${nameSvg}</svg>`);
 
 		// text box: rounded top corners (r14), rounded bottom (r20) nesting the border; >=5px side padding inside
 		C.sheet = await rasterize(`${svgOpen}<path d="M ${IX0},${sheetTop + 14} Q ${IX0},${sheetTop} ${IX0 + 14},${sheetTop} H ${IX1 - 14} Q ${IX1},${sheetTop} ${IX1},${sheetTop + 14} V ${IY1 - 20} Q ${IX1},${IY1} ${IX1 - 20},${IY1} H ${IX0 + 20} Q ${IX0},${IY1} ${IX0},${IY1 - 20} Z" fill="#100d0b"/><line x1="${IX0 + 14}" y1="${sheetTop}" x2="${IX1 - 14}" y2="${sheetTop}" stroke="rgba(255,255,255,0.16)" stroke-width="1"/></svg>`);
@@ -375,19 +401,18 @@ class Photo {
 
 		const vy = sheetTop + 25, srY = IY1 - 19;
 		const descFill = v.descriptionColor ? css(v.descriptionColor) : (v.horror ? css([178, 52, 52]) : C.body);
-		let s2 = tracked(fonts().sansBold, this.versionLabel, { size: 20, cx: W / 2, cy: vy, tracking: 4, fill: css(this.versionColor) });
-		const lines = this.description ? wrapBalanced(fonts().serifItalic, this.description, 21, IW - 10) : []; // 5px side padding
+		let s2 = tracked(cardFonts.sansBold, this.versionLabel, { size: 20, cx: W / 2, cy: vy, tracking: 4, fill: css(this.versionColor) });
+		const lines = this.description ? wrapBalanced(cardFonts.serifItalic, this.description, 21, IW - 10) : []; // 5px side padding
 		const lh = 33, descCy = ((vy + 26) + (srY - 22)) / 2;
-		lines.forEach((ln, i) => { s2 += tracked(fonts().serifItalic, ln, { size: 21, cx: W / 2, cy: descCy - (lines.length - 1) * lh / 2 + i * lh, fill: descFill }); });
+		lines.forEach((ln, i) => { s2 += tracked(cardFonts.serifItalic, ln, { size: 21, cx: W / 2, cy: descCy - (lines.length - 1) * lh / 2 + i * lh, fill: descFill }); });
 		C.text = await rasterize(`${svgOpen}${s2}</svg>`);
 
-		const srTxt = `S.R. ${sr.toFixed(8)}`, xpTxt = `${(XP_PROGRESS * 100).toFixed(1)}%`;
-		const leftW = fonts().sans.getWidth(srTxt, { fontSize: 16 }) + 2 * ([...srTxt].length - 1);
-		const rightW = fonts().sansBold.getWidth(this.mint, { fontSize: 18 }) + 2 * (this.mint.length - 1);
+		const srTxt = `S.R. ${sr.toFixed(8)}`;
+		const leftW = cardFonts.sans.getWidth(srTxt, { fontSize: 16 }) + 2 * ([...srTxt].length - 1);
+		const rightW = cardFonts.sansBold.getWidth(this.mint, { fontSize: 18 }) + 2 * (this.mint.length - 1);
 		const brow = `<g opacity="0.9">` +
-			tracked(fonts().sans, srTxt, { size: 16, cx: IX0 + 16 + leftW / 2, cy: srY, tracking: 2, fill: C.bodyBright }) +
-			tracked(fonts().sans, xpTxt, { size: 16, cx: W / 2, cy: srY, tracking: 2, fill: C.bodyBright }) +
-			tracked(fonts().sansBold, this.mint, { size: 18, cx: IX1 - 16 - rightW / 2, cy: srY, tracking: 2, fill: C.bodyBright }) + `</g>`;
+			tracked(cardFonts.sans, srTxt, { size: 16, cx: IX0 + 16 + leftW / 2, cy: srY, tracking: 2, fill: C.bodyBright }) +
+			tracked(cardFonts.sansBold, this.mint, { size: 18, cx: IX1 - 16 - rightW / 2, cy: srY, tracking: 2, fill: C.bodyBright }) + `</g>`;
 		C.bottom = await rasterize(`${svgOpen}${brow}</svg>`);
 
 		C.rainbow = await sharp(rainbow256(), { raw: { width: 256, height: 256, channels: 3 } }).resize(W, H).raw().toBuffer();
@@ -409,7 +434,7 @@ class Photo {
 		const sr = this.sr, artH = C.artH, sheetTop = C.sheetTop, meta = C.meta;
 		const artBuf = await this._artBuffer();
 
-		let s = Math.max(IW / meta.width, artH / meta.height), panX = 0;
+		let s = Math.max(IW / meta.width, IH / meta.height), panX = 0;
 		if (t != null) { s *= 1.04 * (1 + 0.035 * Math.sin(2 * Math.PI * t)); panX = Math.round(14 * Math.sin(2 * Math.PI * t + 1.0)); }
 		const rw = Math.round(meta.width * s) + 1, rh = Math.round(meta.height * s) + 1;
 		const ox = Math.max(0, Math.min(rw - IW, Math.round((rw - IW) / 2) + panX));
@@ -436,14 +461,15 @@ class Photo {
 		const artH = Math.round(IH * this.artFrac);
 		const sheetTop = this.artFrac < 1 ? IY0 + artH - 40 : IY1 - 240;
 		const C = await this._static();
+		const cardFonts = fonts(this.fontFamily);
 		const titleText = this.titles.join(" / ");
 		const likeText = this.likes > 0 ? `♥ ${fmtInt(this.likes)}` : "";
-		const likeWidth = likeText ? fonts().sans.getWidth(likeText, { fontSize: 15 }) : 0;
+		const likeWidth = likeText ? cardFonts.sans.getWidth(likeText, { fontSize: 15 }) : 0;
 		const labels = await rasterize(`${svgOpen}` +
-			squeeze(fonts().sansBold, `LVL ${this.level}`, { size: 24, baselineY: IY0 + 40, x: IX0 + 16, align: "left" }) +
-			squeeze(fonts().sansBold, this.masterNo, { size: 24, baselineY: IY0 + 40, x: IX1 - 16, align: "right" }) +
-			(likeText ? tracked(fonts().sans, likeText, { size: 15, cx: IX1 - 16 - likeWidth / 2, cy: sheetTop + 25, fill: C.bodyBright, opacity: 0.9 }) : "") +
-			(titleText ? tracked(fonts().sansBold, titleText, { size: 16, cx: W / 2, cy: sheetTop + 52, fill: css(this.versionColor) }) : "") + `</svg>`);
+			squeeze(cardFonts.sansBold, `LVL ${this.level}`, { size: 24, baselineY: IY0 + 40, x: IX0 + 16, align: "left" }) +
+			squeeze(cardFonts.sansBold, this.masterNo, { size: 24, baselineY: IY0 + 40, x: IX1 - 16, align: "right" }) +
+			(likeText ? tracked(cardFonts.sans, likeText, { size: 15, cx: IX1 - 16 - likeWidth / 2, cy: sheetTop + 25, fill: C.bodyBright, opacity: 0.9 }) : "") +
+			(titleText ? tracked(cardFonts.sansBold, titleText, { size: 16, cx: W / 2, cy: sheetTop + 52, fill: css(this.versionColor) }) : "") + `</svg>`);
 		return sharp(baseBuffer).composite([{ input: labels }]).png().toBuffer();
 	}
 
