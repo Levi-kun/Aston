@@ -1,7 +1,7 @@
 require("dotenv").config();
 
-const Card = require("./classes/cards/cards.js");
-const sql = require("./databases/index.js");
+const Card = require("../classes/cards/cards.js");
+const sql = require("../databases/index.js");
 
 async function main() {
 	const [cardId, userId] = process.argv.slice(2);
