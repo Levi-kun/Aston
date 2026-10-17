@@ -12,7 +12,7 @@ module.exports = {
 		try {
 
 			const checkQueryAndCreateUser =  await sql`INSERT INTO users (id, name) VALUES (${member.user.id}, ${member.user.username}) ON CONFLICT (id) DO NOTHING`;
-			const createGuildUser = await sql`INSERT into guild_users (user_id, guild_id, display_name) VALUES (${member.user.id}, ${guild.id}, ${member.displayName})`
+			const createGuildUser = await sql`INSERT into guild_users (user_id, guild_id, display_name) VALUES (${member.user.id}, ${guild.id}, ${member.displayName}) ON CONFLICT (user_id, guild_id) DO UPDATE SET display_name = EXCLUDED.display_name, left_guild = FALSE`
 
 		} catch (error) {
 			console.error("Error handling user join event:", error);

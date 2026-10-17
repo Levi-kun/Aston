@@ -296,9 +296,8 @@ it('Handles a member without a guild', async (t) => {
 
 describe('onPlayerLeft', () => {
 
-    it('Removes the user from the guild they left', async () => {
-        await execute(fakeMemberNonBotIsGuild);
-
+    it('Flags the user as having left the guild', async () => {
+        await executeJoin(fakeMemberNonBotIsGuild);
         await executeLeave(fakeMemberNonBotIsGuild);
 
         const userId = fakeMemberNonBotIsGuild.user.id;
@@ -316,16 +315,13 @@ describe('onPlayerLeft', () => {
         `;
 
         assert.equal(users.length, 1, 'User record should remain');
-        assert.equal(
-            membership.length,
-            0,
-            'Guild membership should be removed'
-        );
+        assert.equal(membership.length, 1, 'Membership record should remain');
+        assert.equal(membership[0].left_guild, true, 'Membership should be flagged as left');
     });
 
-    it('Preserves the user membership in other guilds', async () => {
-        await execute(fakeMemberNonBotIsGuild);
-        await execute(fakeMemberNonBotIsOfOtherGuild);
+    it('Preserves membership in other guilds', async () => {
+        await executeJoin(fakeMemberNonBotIsGuild);
+        await executeJoin(fakeMemberNonBotIsOfOtherGuild);
 
         await executeLeave(fakeMemberNonBotIsGuild);
 
@@ -345,21 +341,15 @@ describe('onPlayerLeft', () => {
               AND guild_id = ${secondGuildId}
         `;
 
-        assert.equal(
-            firstMembership.length,
-            0,
-            'Membership in the departed guild should be removed'
-        );
+        assert.equal(firstMembership.length, 1);
+        assert.equal(firstMembership[0].left_guild, true);
 
-        assert.equal(
-            secondMembership.length,
-            1,
-            'Membership in the other guild should remain'
-        );
+        assert.equal(secondMembership.length, 1);
+        assert.equal(secondMembership[0].left_guild, false);
     });
 
-    it('Does not remove another guild membership if no matching membership exists', async () => {
-        await execute(fakeMemberNonBotIsGuild);
+    it('Does not flag another guild membership if no matching membership exists', async () => {
+        await executeJoin(fakeMemberNonBotIsGuild);
 
         // The user has not joined the second guild.
         await executeLeave(fakeMemberNonBotIsOfOtherGuild);
@@ -373,11 +363,8 @@ describe('onPlayerLeft', () => {
               AND guild_id = ${guildId}
         `;
 
-        assert.equal(
-            membership.length,
-            1,
-            'Membership in the first guild should remain'
-        );
+        assert.equal(membership.length, 1);
+        assert.equal(membership[0].left_guild, false);
     });
 
     it('Handles a member without a guild', async (t) => {
@@ -393,6 +380,25 @@ describe('onPlayerLeft', () => {
             ),
             'Expected an error when the member has no guild'
         );
+    });
+
+    it('Resets the flag when a user rejoins the guild', async () => {
+        await executeJoin(fakeMemberNonBotIsGuild);
+        await executeLeave(fakeMemberNonBotIsGuild);
+
+        await executeJoin(fakeMemberNonBotIsGuild);
+
+        const userId = fakeMemberNonBotIsGuild.user.id;
+        const guildId = fakeMemberNonBotIsGuild.guild.id;
+
+        const membership = await sql`
+            SELECT * FROM guild_users
+            WHERE user_id = ${userId}
+              AND guild_id = ${guildId}
+        `;
+
+        assert.equal(membership.length, 1, 'Membership record should not duplicate');
+        assert.equal(membership[0].left_guild, false, 'Rejoining should reactivate membership');
     });
 
 });

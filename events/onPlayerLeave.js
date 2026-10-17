@@ -1,22 +1,35 @@
+
 const { Events } = require("discord.js");
+const sql = require("../databases/index.js");
 
 module.exports = {
-	name: Events.GuildMemberRemove, // Event for player leave
-	async execute(member) {
-		console.log(`${member.displayName} has left ${member.guild.name}`);
-		/*
-		//** TO DO! CONTACTED DATABASE WITH { collection: "guildDataBase", operation: "updateOne", args: [{ id: member.guild.id }, { amountofUsers: member.guild.memberCount }] } INFORMATION.
-		RECREATE THIS IN DB,
+    name: Events.GuildMemberRemove,
 
-		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+    async execute(member) {
+        if (!member.guild) {
+            console.error("Failed: User is not in a Guild");
+            return;
+        }
 
-		*/
-		/*
-		//** TO DO! CONTACTED DATABASE WITH { collection: "userDataBase", operation: "updateOne", args: [{ id: member.user.id, _guild_id: member.guild.id }, { deprecated: true }] } INFORMATION.
-		RECREATE THIS IN DB,
+        if (member.user.bot) {
+            console.error("Failed: User is a bot");
+            return;
+        }
 
-		-- WARN! -- THIS WAS DONE BY AN AI AGENT -- WARN! --
+        try {
+            await sql`
+                UPDATE guild_users
+                SET left_guild = TRUE
+                WHERE user_id = ${member.user.id}
+                  AND guild_id = ${member.guild.id}
+            `;
 
-		*/
-	},
+            console.log(
+                `Successfully marked ${member.user.id} as having left guild ${member.guild.id}`
+            );
+        } catch (err) {
+            console.error("Failed to update guild membership:", err);
+            throw err;
+        }
+    },
 };
