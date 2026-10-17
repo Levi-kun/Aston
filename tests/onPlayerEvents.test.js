@@ -4,8 +4,9 @@ process.env.DB_NAME = 'test';
 
 const { describe, it, mock, before, after, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
-const { execute } = require('../events/onPlayerJoin');
-const { testAtStartTable } = require('../src/createDatabases');
+const { execute: executeJoin } = require('../events/onPlayerJoin.js');
+const { execute: executeLeave } = require('../events/onPlayerLeave.js');
+const { testAtStartTable } = require('../src/createDatabases.js');
 const sql = require('../databases/index.js')
 
 // Unit Test on the onPlayerJoin
@@ -52,13 +53,13 @@ before(async () => {
         console.error('Failed to create guildToUserTable:', err);
     }
 
-    const expected = ['users', 'guilds', 'guild_user'];
+    const expected = ['users', 'guilds', 'guild_users'];
 
     const rows = await sql`
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
-          AND table_name IN ('users', 'guilds', 'guild_user');
+          AND table_name IN ('users', 'guilds', 'guild_users');
     `;
 
     const found = rows.map((r) => r.table_name);
@@ -89,7 +90,7 @@ before(async () => {
 
 beforeEach(async () => {
     await sql`
-        TRUNCATE guild_user, users, guilds
+        TRUNCATE guild_users, users, guilds
         RESTART IDENTITY CASCADE
     `;
 
@@ -102,7 +103,7 @@ beforeEach(async () => {
 });
 
 after(async() => {
-    await sql`DROP TABLE IF EXISTS guild_user, users, guilds CASCADE`;
+    await sql`DROP TABLE IF EXISTS guild_users, users, guilds CASCADE`;
     await sql.end()
 })
 
@@ -165,7 +166,7 @@ const fakeMemberNonBotIsNotGuild = {
 describe('onPlayerJoin', () => {
 
     it('Creates a user and attaches them to an existing guild', async () => {
-        await execute(fakeMemberNonBotIsGuild);
+        await executeJoin(fakeMemberNonBotIsGuild);
 
         const userId = fakeMemberNonBotIsGuild.user.id;
         const guildId = fakeMemberNonBotIsGuild.guild.id;
@@ -176,7 +177,7 @@ describe('onPlayerJoin', () => {
         `;
 
         const guildUsers = await sql`
-            SELECT * FROM guild_user
+            SELECT * FROM guild_users
             WHERE user_id = ${userId}
               AND guild_id = ${guildId}
         `;
@@ -191,10 +192,10 @@ describe('onPlayerJoin', () => {
 
     it('Attaches an existing user to another guild without duplicating the user', async () => {
         // First, create the user and attach them to the first guild.
-        await execute(fakeMemberNonBotIsGuild);
+        await executeJoin(fakeMemberNonBotIsGuild);
 
         // Then, process the same user joining another guild.
-        await execute(fakeMemberNonBotIsOfOtherGuild);
+        await executeJoin(fakeMemberNonBotIsOfOtherGuild);
 
         const userId = fakeMemberNonBotIsOfOtherGuild.user.id;
         const guildId = fakeMemberNonBotIsOfOtherGuild.guild.id;
@@ -205,7 +206,7 @@ describe('onPlayerJoin', () => {
         `;
 
         const guildUsers = await sql`
-            SELECT * FROM guild_user
+            SELECT * FROM guild_users
             WHERE user_id = ${userId}
               AND guild_id = ${guildId}
         `;
@@ -223,7 +224,7 @@ describe('onPlayerJoin', () => {
         );
 
         const allGuilds = await sql`
-            SELECT guild_id FROM guild_user
+            SELECT guild_id FROM guild_users
             WHERE user_id = ${userId}
         `;
 
@@ -234,11 +235,11 @@ describe('onPlayerJoin', () => {
         );
     });
 
-    it('Ignores bot members', async () => {
-    const logMock = mock.method(console, 'log');
+    it('Ignores bot members', async (t) => {
+    const logMock = t.mock.method(console, 'error', ()=> {});
 
     try {
-        await execute(fakeMemberBotIsGuild);
+        await executeJoin(fakeMemberBotIsGuild);
 
         assert.ok(
             logMock.mock.calls.some((call) =>
@@ -257,7 +258,7 @@ describe('onPlayerJoin', () => {
         `;
 
         const guildUsers = await sql`
-            SELECT * FROM guild_user
+            SELECT * FROM guild_users
             WHERE user_id = ${userId}
         `;
 
@@ -272,23 +273,126 @@ describe('onPlayerJoin', () => {
     }
 });
 
-it('Handles a member without a guild', async () => {
-    const logMock = mock.method(console, 'log');
+it('Handles a member without a guild', async (t) => {
+    const logMock = t.mock.method(console, 'error', ()=> {});
 
     try {
-        await execute(fakeMemberNonBotIsNotGuild);
+        await executeJoin(fakeMemberNonBotIsNotGuild);
 
         assert.ok(
             logMock.mock.calls.some((call) =>
                 call.arguments.some((arg) =>
-                    String(arg).includes('Failed: User is in DM')
+                    String(arg).includes('Failed: User is not in a Guild')
                 )
             ),
-            'Expected console.log to report that the user is in a DM'
+            'Expected console.log to report that the user is in a guild'
         );
     } finally {
         mock.restoreAll();
     }
 });
+
+});
+
+describe('onPlayerLeft', () => {
+
+    it('Removes the user from the guild they left', async () => {
+        await execute(fakeMemberNonBotIsGuild);
+
+        await executeLeave(fakeMemberNonBotIsGuild);
+
+        const userId = fakeMemberNonBotIsGuild.user.id;
+        const guildId = fakeMemberNonBotIsGuild.guild.id;
+
+        const users = await sql`
+            SELECT * FROM users
+            WHERE id = ${userId}
+        `;
+
+        const membership = await sql`
+            SELECT * FROM guild_users
+            WHERE user_id = ${userId}
+              AND guild_id = ${guildId}
+        `;
+
+        assert.equal(users.length, 1, 'User record should remain');
+        assert.equal(
+            membership.length,
+            0,
+            'Guild membership should be removed'
+        );
+    });
+
+    it('Preserves the user membership in other guilds', async () => {
+        await execute(fakeMemberNonBotIsGuild);
+        await execute(fakeMemberNonBotIsOfOtherGuild);
+
+        await executeLeave(fakeMemberNonBotIsGuild);
+
+        const userId = fakeMemberNonBotIsGuild.user.id;
+        const firstGuildId = fakeMemberNonBotIsGuild.guild.id;
+        const secondGuildId = fakeMemberNonBotIsOfOtherGuild.guild.id;
+
+        const firstMembership = await sql`
+            SELECT * FROM guild_users
+            WHERE user_id = ${userId}
+              AND guild_id = ${firstGuildId}
+        `;
+
+        const secondMembership = await sql`
+            SELECT * FROM guild_users
+            WHERE user_id = ${userId}
+              AND guild_id = ${secondGuildId}
+        `;
+
+        assert.equal(
+            firstMembership.length,
+            0,
+            'Membership in the departed guild should be removed'
+        );
+
+        assert.equal(
+            secondMembership.length,
+            1,
+            'Membership in the other guild should remain'
+        );
+    });
+
+    it('Does not remove another guild membership if no matching membership exists', async () => {
+        await execute(fakeMemberNonBotIsGuild);
+
+        // The user has not joined the second guild.
+        await executeLeave(fakeMemberNonBotIsOfOtherGuild);
+
+        const userId = fakeMemberNonBotIsGuild.user.id;
+        const guildId = fakeMemberNonBotIsGuild.guild.id;
+
+        const membership = await sql`
+            SELECT * FROM guild_users
+            WHERE user_id = ${userId}
+              AND guild_id = ${guildId}
+        `;
+
+        assert.equal(
+            membership.length,
+            1,
+            'Membership in the first guild should remain'
+        );
+    });
+
+    it('Handles a member without a guild', async (t) => {
+        const logMock = t.mock.method(console, 'error', () => {});
+
+        await executeLeave(fakeMemberNonBotIsNotGuild);
+
+        assert.ok(
+            logMock.mock.calls.some((call) =>
+                call.arguments.some((arg) =>
+                    String(arg).includes('Failed: User is not in a Guild')
+                )
+            ),
+            'Expected an error when the member has no guild'
+        );
+    });
 
 });
