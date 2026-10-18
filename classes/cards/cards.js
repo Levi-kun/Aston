@@ -29,25 +29,48 @@ static async grabCardData(cardId, userId) {
    return new CloneCard(structuredClone({...this}));
 }
 
-   async _grab_photo () {
-      const [query] = await sql`SELECT photos.location FROM photos JOIN photo_per_card ON photo_per_card.photo_id = photos.id WHERE photo_per_card.card_id = ${this.card_id};`
-      return query;
-   }
+   async _grab_photo() {
+    const [photo] = await sql`
+        SELECT photos.location
+        FROM photos
+        JOIN photo_per_card
+            ON photo_per_card.photo_id = photos.id
+        WHERE photo_per_card.card_id = ${this.card_id}
+        LIMIT 1;
+    `;
 
-   async _find_likes() {
-      const [query] = await sql`SELECT count FROM likes WHERE card_id = ${this.id}`
-      return query;
-   }
+    return photo?.location ?? null;
+}
 
-   async _grab_variation() {
-      const [query] = await sql`SELECT modification FROM alt_Version WHERE id = ${this.alt_version}`
-      return query;
-   }
+async _find_likes() {
+    const [likes] = await sql`
+        SELECT count
+        FROM likes
+        WHERE card_id = ${this.id};
+    `;
 
-   async _grab_rarity() {
-      const [query] = await sql`SELECT rarity FROM alt_Version WHERE id = ${this.alt_version}`
-      return query;
-   }
+    return likes?.count ?? null;
+}
+
+async _grab_variation() {
+    const [variation] = await sql`
+        SELECT modification
+        FROM alt_Version
+        WHERE id = ${this.alt_version};
+    `;
+
+    return variation?.modification ?? null;
+}
+
+async _grab_rarity() {
+    const [rarity] = await sql`
+        SELECT rarity
+        FROM alt_Version
+        WHERE id = ${this.alt_version};
+    `;
+
+    return rarity?.rarity ?? null;
+}
 
    async change_card_state() {
       const [query] = sql`UPDATE enabled_cards SET enabled = NOT enabled WHERE card_id = ${this.id} AND user_id = ${this.owner_id}`
